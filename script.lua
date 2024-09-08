@@ -378,8 +378,8 @@ function onTick(tick_time)
 				local vehicle_pos = server.getVehiclePos(vehicle_id)
                 local vehicle_x, vehicle_y, vehicle_z = matrix.position(vehicle_pos)
 
-                    server.removeMapObject(0, vehicle_object.map_id)
-                    server.addMapObject(0, vehicle_object.map_id, 1, 18, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile vessel sighted", marker_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed.", icon_r, icon_g, icon_b, 255)
+                    server.removeMapObject(-1, vehicle_object.map_id)
+                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile vessel sighted", marker_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed.", icon_r, icon_g, icon_b, 255)
              end
             			
             if render_debug then
