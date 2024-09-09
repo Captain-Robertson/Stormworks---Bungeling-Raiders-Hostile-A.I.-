@@ -659,32 +659,28 @@ function hasTag(tags, tag)
 	return false
 end
 
--- This part of the code was originally created by Tentacle and contains the script used to award the player whenever an enemy ship despawns, unfortunately it doesn't like vehicles with less than 3 tags despawning and throws back an error.
--- I've tried to fix it in the past using the "if #vd.tags < 3 then return end" method, but that just throws up another error, so any help on resolving this part would be much appreciated.
-
 function onVehicleDespawn(vehicle_id, peer_id)
 
-local vd = server.getVehicleData(vehicle_id)
-local vdt = vd.tags[3]
+    local vehicle_data = server.getVehicleData(vehicle_id)
 
-if vdt == "threat=low" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.lt), 9)
-server.setCurrency(server.getCurrency() + g_savedata.lt)
-end
-				
-if vdt == "threat=medium" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.mt), 9)
-server.setCurrency(server.getCurrency() + g_savedata.mt)
-end
-
-if vdt == "threat=high" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.ht), 9)
-server.setCurrency(server.getCurrency() + g_savedata.ht)
-end
-
-if vdt == "threat=extreme" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.et), 9)
-server.setCurrency(server.getCurrency() + g_savedata.ht)
-end
-
+    local threat_level = "none"
+    for tag_index, tag_object in pairs(vehicle_data.tags) do
+        if tag_object:find("threat=") ~= nil then
+            threat_level = tag_object:gsub("threat=","")
+        end
+    end
+    local reward_amount = 0
+    if threat_level == "low" then
+        reward_amount = g_savedata.lt
+    elseif threat_level == "medium" then
+        reward_amount = g_savedata.mt
+		elseif threat_level == "high" then
+        reward_amount = g_savedata.ht
+    elseif threat_level == "extreme" then
+        reward_amount = g_savedata.et
+    end
+	if reward_amount > 1 then
+    server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
+    server.setCurrency(server.getCurrency() + reward_amount)
+	end
 end
