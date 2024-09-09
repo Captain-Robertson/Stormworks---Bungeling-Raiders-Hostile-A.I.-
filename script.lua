@@ -664,27 +664,23 @@ end
 
 function onVehicleDespawn(vehicle_id, peer_id)
 
-local vd = server.getVehicleData(vehicle_id)
-local vdt = vd.tags[3]
+    local vehicle_data = server.getVehicleData(vehicle_id)
 
-if vdt == "threat=low" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.lt), 9)
-server.setCurrency(server.getCurrency() + g_savedata.lt)
-end
-				
-if vdt == "threat=medium" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.mt), 9)
-server.setCurrency(server.getCurrency() + g_savedata.mt)
-end
-
-if vdt == "threat=high" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.ht), 9)
-server.setCurrency(server.getCurrency() + g_savedata.ht)
-end
-
-if vdt == "threat=extreme" then
-server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(g_savedata.et), 9)
-server.setCurrency(server.getCurrency() + g_savedata.ht)
-end
+    local threat_level = "low"
+    for tag_index, tag_object in pairs(vehicle_data.tags) do
+        if tag_object:find("threat=") ~= nil then
+            threat_level = tag_object:gsub("threat=","")
+        end
+    end
+    local reward_amount = g_savedata.lt
+    if threat_level == "medium" then
+        reward_amount = g_savedata.mt
+    elseif threat_level == "high" then
+        reward_amount = g_savedata.ht
+    elseif threat_level == "extreme" then
+        reward_amount = g_savedata.et
+    end
+    server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
+    server.setCurrency(server.getCurrency() + reward_amount)
 
 end
