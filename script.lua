@@ -405,13 +405,7 @@ function onTick(tick_time)
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 60 * 2) then
                 local vehicle_pos = server.getVehiclePos(vehicle_id)
                 if vehicle_pos[14] < -22 or vehicle_object.despawn_timer > 2 * 1 * 1 then
-				server.spawnExplosion(vehicle_pos, explosion_size)
-				server.removeMapObject(0, vehicle_object.map_id)
-				server.despawnVehicle(vehicle_id, true)
-                    for _, survivor in pairs(vehicle_object.survivors) do
-                        server.despawnObject(survivor.id, true)
-                    end
-                    g_savedata.vehicles[vehicle_id] = nil
+                    server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
         end
@@ -684,6 +678,17 @@ function onVehicleDespawn(vehicle_id, peer_id)
 	if reward_amount > 1 then
         server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
-        g_savedata.vehicles[vehicle_id] = nil
+        cleanupVehicle(vehicle_id)
 	end
+end
+
+function cleanupVehicle(vehicle_id)
+    g_savedata.vehicles[vehicle_id] = nil
+
+    local vehicle_pos = server.getVehiclePos(vehicle_id)
+    server.spawnExplosion(vehicle_pos, explosion_size)
+    server.removeMapObject(0, vehicle_object.map_id)
+    for _, survivor in pairs(vehicle_object.survivors) do
+        server.despawnObject(survivor.id, true)
+    end
 end
