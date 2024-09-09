@@ -687,3 +687,29 @@ function onVehicleDespawn(vehicle_id, peer_id)
         g_savedata.vehicles[vehicle_id] = nil
 	end
 end
+
+function respawnLosses()
+    local random_location_index = math.random(1, #built_locations)
+    local location = built_locations[random_location_index]
+    
+    --local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
+
+    local players = server.getPlayers()
+	local random_player = players[math.random(1, #players)]
+	local random_player_transform = server.getPlayerPos(random_player.id)
+
+    local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 4000, 10000)
+    spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
+
+    if is_success then
+        local all_mission_objects = {}
+        local spawned_objects = {
+            vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
+            survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
+            objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
+            zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
+        }
+
+        g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
+    end
+end
