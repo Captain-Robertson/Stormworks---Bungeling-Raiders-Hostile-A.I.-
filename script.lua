@@ -683,12 +683,16 @@ function onVehicleDespawn(vehicle_id, peer_id)
 end
 
 function cleanupVehicle(vehicle_id)
+    vehicle_object = g_savedata.vehicles[vehicle_id]
     g_savedata.vehicles[vehicle_id] = nil
 
     local vehicle_pos = server.getVehiclePos(vehicle_id)
     server.spawnExplosion(vehicle_pos, explosion_size)
-    server.removeMapObject(0, vehicle_object.map_id)
-    for _, survivor in pairs(vehicle_object.survivors) do
-        server.despawnObject(survivor.id, true)
+
+    if vehicle_object ~= nil then
+        server.removeMapObject(0, vehicle_object.map_id)
+        for _, survivor in pairs(vehicle_object.survivors) do
+            server.despawnObject(survivor.id, true)
+        end
     end
 end
