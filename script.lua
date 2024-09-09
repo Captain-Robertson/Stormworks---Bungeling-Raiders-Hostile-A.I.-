@@ -660,7 +660,9 @@ function hasTag(tags, tag)
 end
 
 function onVehicleDespawn(vehicle_id, peer_id)
-
+    if g_savedata.vehicles[vehicle_id] == nil then
+        return
+    end
     local vehicle_data = server.getVehicleData(vehicle_id)
 
     local threat_level = "none"
@@ -680,7 +682,8 @@ function onVehicleDespawn(vehicle_id, peer_id)
         reward_amount = g_savedata.et
     end
 	if reward_amount > 1 then
-    server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
-    server.setCurrency(server.getCurrency() + reward_amount)
+        server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
+        server.setCurrency(server.getCurrency() + reward_amount)
+        g_savedata.vehicles[vehicle_id] = nil
 	end
 end
