@@ -690,7 +690,7 @@ function cleanupVehicle(vehicle_id)
     server.spawnExplosion(vehicle_pos, explosion_size)
 
     if vehicle_object ~= nil then
-        server.removeMapObject(0, vehicle_object.map_id)
+        server.removeMapObject(-1, vehicle_object.map_id)
         for _, survivor in pairs(vehicle_object.survivors) do
             server.despawnObject(survivor.id, true)
         end
