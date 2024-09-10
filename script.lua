@@ -405,13 +405,7 @@ function onTick(tick_time)
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 60 * 2) then
                 local vehicle_pos = server.getVehiclePos(vehicle_id)
                 if vehicle_pos[14] < -22 or vehicle_object.despawn_timer > 2 * 1 * 1 then
-				server.spawnExplosion(vehicle_pos, explosion_size)
-				server.removeMapObject(0, vehicle_object.map_id)
-				server.despawnVehicle(vehicle_id, true)
-                    for _, survivor in pairs(vehicle_object.survivors) do
-                        server.despawnObject(survivor.id, true)
-                    end
-                    g_savedata.vehicles[vehicle_id] = nil
+                    server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
         end
@@ -659,28 +653,46 @@ function hasTag(tags, tag)
 	return false
 end
 
--- This part of the code was originally created by Tentacle and contains the script used to award the player whenever an enemy ship despawns, unfortunately it doesn't like vehicles with less than 3 tags despawning and throws back an error.
--- I've tried to fix it in the past using the "if #vd.tags < 3 then return end" method, but that just throws up another error, so any help on resolving this part would be much appreciated.
-
 function onVehicleDespawn(vehicle_id, peer_id)
-
+    if g_savedata.vehicles[vehicle_id] == nil then
+        return
+    end
     local vehicle_data = server.getVehicleData(vehicle_id)
 
-    local threat_level = "low"
+    local threat_level = "none"
     for tag_index, tag_object in pairs(vehicle_data.tags) do
         if tag_object:find("threat=") ~= nil then
             threat_level = tag_object:gsub("threat=","")
         end
     end
-    local reward_amount = g_savedata.lt
-    if threat_level == "medium" then
+    local reward_amount = 0
+    if threat_level == "low" then
+        reward_amount = g_savedata.lt
+    elseif threat_level == "medium" then
         reward_amount = g_savedata.mt
-    elseif threat_level == "high" then
+		elseif threat_level == "high" then
         reward_amount = g_savedata.ht
     elseif threat_level == "extreme" then
         reward_amount = g_savedata.et
     end
-    server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
-    server.setCurrency(server.getCurrency() + reward_amount)
+	if reward_amount > 1 then
+        server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
+        server.setCurrency(server.getCurrency() + reward_amount)
+        cleanupVehicle(vehicle_id)
+	end
+end
 
+function cleanupVehicle(vehicle_id)
+    vehicle_object = g_savedata.vehicles[vehicle_id]
+    g_savedata.vehicles[vehicle_id] = nil
+
+    local vehicle_pos = server.getVehiclePos(vehicle_id)
+    server.spawnExplosion(vehicle_pos, explosion_size)
+
+    if vehicle_object ~= nil then
+        server.removeMapObject(-1, vehicle_object.map_id)
+        for _, survivor in pairs(vehicle_object.survivors) do
+            server.despawnObject(survivor.id, true)
+        end
+    end
 end
