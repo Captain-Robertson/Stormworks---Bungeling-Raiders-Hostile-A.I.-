@@ -1,4 +1,4 @@
-vehicle_count = property.slider("AI Count", 0, 50, 1, 25)
+
 
 g_savedata =
 {
@@ -6,6 +6,7 @@ show_markers = property.checkbox("Show hostile vessels on the map", true),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 5, 60,1,30),
 vehicles = {},
 respawn_timer = 0,
+max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
 }
 
 built_locations = {}
@@ -695,7 +696,13 @@ function onVehicleDespawn(vehicle_id, peer_id)
 end
 
 function respawnLosses(instant)
-
+    local vehicle_count = 0
+    for _ in pairs(g_savedata.vehicles) do
+        vehicle_count = vehicle_count + 1
+    end
+    if vehicle_count > g_savedata.max_vehicle_count then
+        return -1
+    end
     g_savedata.respawn_timer = g_savedata.respawn_timer + 1
 
     if g_savedata.respawn_timer > g_savedata.respawn_frequency * 60 * 60 or instant then
