@@ -31,8 +31,9 @@ function onCreate(is_world_create)
 	g_savedata.ht = 20000
 	g_savedata.et = 30000
 
-        server.announce("hostile_ai", "spawning " .. vehicle_count .. " ships")
+        
         --[[
+        server.announce("hostile_ai", "spawning " .. vehicle_count .. " ships")
         for i = 1, vehicle_count do
 
             local random_location_index = math.random(1, #built_locations)
