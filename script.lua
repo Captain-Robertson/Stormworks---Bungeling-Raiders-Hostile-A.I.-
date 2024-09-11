@@ -3,7 +3,7 @@
 g_savedata =
 {
 show_markers = property.checkbox("Show hostile vessels on the map", true),
-respawn_frequency = property.slider("Respawn Frequency (mins)", 5, 60,1,30),
+respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
 vehicles = {},
 respawn_timer = 0,
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
