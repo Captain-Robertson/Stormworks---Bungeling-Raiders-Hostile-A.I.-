@@ -3,7 +3,9 @@ vehicle_count = property.slider("AI Count", 0, 50, 1, 25)
 g_savedata =
 {
 show_markers = property.checkbox("Show hostile vessels on the map", true),
-vehicles = {}
+respawn_frequency = property.slider("Respawn Frequency (mins)", 5, 60,1,30),
+vehicles = {},
+respawn_timer = 0,
 }
 
 built_locations = {}
@@ -14,13 +16,14 @@ local render_debug = false
 local g_debug_vehicle_id = "0"
 
 function onCreate(is_world_create)
+    for i in iterPlaylists() do
+        for j in iterLocations(i) do
+            build_locations(i, j)
+        end
+    end
     if is_world_create then
 
-        for i in iterPlaylists() do
-			for j in iterLocations(i) do
-				build_locations(i, j)
-			end
-		end
+        
 
 	g_savedata.lt = 5000
 	g_savedata.mt = 10000
@@ -28,7 +31,7 @@ function onCreate(is_world_create)
 	g_savedata.et = 30000
 
         server.announce("hostile_ai", "spawning " .. vehicle_count .. " ships")
-
+        --[[
         for i = 1, vehicle_count do
 
             local random_location_index = math.random(1, #built_locations)
@@ -51,6 +54,7 @@ function onCreate(is_world_create)
                 g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
             end
         end
+        ]]
 
         for i = 1, #unique_locations do
 
@@ -247,8 +251,7 @@ function createPath(vehicle_id)
    return path_list
 end
 
-function onTick(tick_time)
-
+function updateVehicles()
     for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
 
         if vehicle_object ~= nil then
@@ -418,6 +421,11 @@ function onTick(tick_time)
     end
 end
 
+function onTick(tick_time)
+    updateVehicles()
+    respawnLosses(false)
+end
+
 function onVehicleDamaged(vehicle_id, amount, x, y, z, body_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
@@ -426,7 +434,10 @@ function onVehicleDamaged(vehicle_id, amount, x, y, z, body_id)
 end
 
 function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1, arg2, arg3, arg4)
-
+    if command == "?hostile_ai_respawn" then
+        local result = respawnLosses(true)
+        server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
+    end
 	if peer_id == -1 then
 		if command == "?hostile_ai_debug" and server.isDev() then
             render_debug = not render_debug
@@ -466,6 +477,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 end
             end
         end
+        
     end
 end
 
@@ -688,28 +700,35 @@ function onVehicleDespawn(vehicle_id, peer_id)
 	end
 end
 
-function respawnLosses()
-    local random_location_index = math.random(1, #built_locations)
-    local location = built_locations[random_location_index]
-    
-    --local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
+function respawnLosses(instant)
+    g_savedata.respawn_timer = g_savedata.respawn_timer + 1
 
-    local players = server.getPlayers()
-	local random_player = players[math.random(1, #players)]
-	local random_player_transform = server.getPlayerPos(random_player.id)
+    if g_savedata.respawn_timer > g_savedata.respawn_frequency * 60 * 60 or instant then
 
-    local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 4000, 10000)
-    spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
+        local random_location_index = math.random(1, #built_locations)
+        local location = built_locations[random_location_index]
 
-    if is_success then
-        local all_mission_objects = {}
-        local spawned_objects = {
-            vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
-            survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
-            objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
-            zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
-        }
+        local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
+        
+        local players = server.getPlayers()
+	    local random_player = players[math.random(1, #players)]
+	    local random_player_transform = server.getPlayerPos(random_player.id)
 
-        g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
+        local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 10000, 40000)
+        local spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
+
+        if is_success then
+            local all_mission_objects = {}
+            local spawned_objects = {
+                vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
+                survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
+                objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
+                zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
+            }
+
+            g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
+            return spawned_objects.vehicle.id
+        end
+        return -1
     end
 end
