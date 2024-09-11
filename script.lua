@@ -701,10 +701,11 @@ function onVehicleDespawn(vehicle_id, peer_id)
 end
 
 function respawnLosses(instant)
+
     g_savedata.respawn_timer = g_savedata.respawn_timer + 1
 
     if g_savedata.respawn_timer > g_savedata.respawn_frequency * 60 * 60 or instant then
-
+        g_savedata.respawn_timer = 0
         local random_location_index = math.random(1, #built_locations)
         local location = built_locations[random_location_index]
 
