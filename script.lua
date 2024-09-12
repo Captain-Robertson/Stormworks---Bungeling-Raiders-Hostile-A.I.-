@@ -7,6 +7,7 @@ respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
 vehicles = {},
 respawn_timer = 0,
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
+start_vehicle_count = property.slider("Start AI Count", 0, 50, 1, 25),
 }
 
 built_locations = {}
@@ -32,9 +33,8 @@ function onCreate(is_world_create)
 	g_savedata.et = 30000
 
         
-        --[[
-        server.announce("hostile_ai", "spawning " .. vehicle_count .. " ships")
-        for i = 1, vehicle_count do
+        server.announce("hostile_ai", "spawning " .. math.min(start_vehicle_count,max_vehicle_count) .. " ships")
+        for i = 1, math.min(start_vehicle_count,max_vehicle_count) do
 
             local random_location_index = math.random(1, #built_locations)
             local location = built_locations[random_location_index]
@@ -56,7 +56,6 @@ function onCreate(is_world_create)
                 g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
             end
         end
-        ]]
 
         for i = 1, #unique_locations do
 
