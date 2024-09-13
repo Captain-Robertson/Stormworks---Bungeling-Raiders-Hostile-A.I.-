@@ -33,8 +33,8 @@ function onCreate(is_world_create)
 	g_savedata.et = 30000
 
         
-        server.announce("hostile_ai", "spawning " .. math.min(start_vehicle_count,max_vehicle_count) .. " ships")
-        for i = 1, math.min(start_vehicle_count,max_vehicle_count) do
+        server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
+        for i = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
 
             local random_location_index = math.random(1, #built_locations)
             local location = built_locations[random_location_index]
