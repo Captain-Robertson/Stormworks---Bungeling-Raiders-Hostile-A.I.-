@@ -412,8 +412,8 @@ function updateVehicles()
                     if vehicle_object.size then debug_data = debug_data .. "Size: " .. vehicle_object.size .. "\n" end
                     debug_data = debug_data .. "Pos: " .. math.floor(vehicle_x) .. "\n".. math.floor(vehicle_y) .. "\n".. math.floor(vehicle_z) .. "\n"
 
-                    server.removeMapObject(-1, vehicle_object.map_id)
-                    server.addMapObject(-1, vehicle_object.map_id, 1, 17, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile AI Boat" .. vehicle_id, 2000, debug_data, icon_r, icon_g, icon_b, 255)
+                    server.removeMapObject(0, vehicle_object.map_id)
+                    server.addMapObject(0, vehicle_object.map_id, 1, 17, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile AI Boat" .. vehicle_id, 2000, debug_data, icon_r, icon_g, icon_b, 255)
                 end
             end
 
