@@ -831,9 +831,3 @@ end
 function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
     addVictim(vehicle_id,peer_id,x,y,z)
 end
-
-function onVehicleDespawn(vehicle_id, peer_id)
-	if g_savedata.victim_vehicles[vehicle_id] ~= nil then
-        g_savedata.victim_vehicles[vehicle_id] = nil
-    end
-end
