@@ -8,6 +8,7 @@ vehicles = {},
 respawn_timer = 0,
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
 start_vehicle_count = property.slider("Start AI Count", 0, 50, 1, 25),
+victim_vehicles = {},
 }
 
 built_locations = {}
@@ -189,6 +190,20 @@ function onVehicleLoad(vehicle_id)
         end
         refuel(vehicle_id)
 		reload(vehicle_id)
+    end
+
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        local vehicle_data = server.getVehicleComponents(vehicle_id)
+        g_savedata.victim_vehicles[vehicle_id].damage_threshold = vehicle_data.voxels * 0.75
+        g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
+    else
+        server.announce("hostile_ai","get position")
+        local transform,success = server.getVehiclePos(vehicle_id)
+        if not success then
+            server.announce("hostile_ai","failed to get transform on load")
+        end
+        local x,y,z = matrix.position(transform)
+        addVictim(vehicle_id,-1,x,y,z)
     end
 
 end
@@ -397,8 +412,8 @@ function updateVehicles()
                     if vehicle_object.size then debug_data = debug_data .. "Size: " .. vehicle_object.size .. "\n" end
                     debug_data = debug_data .. "Pos: " .. math.floor(vehicle_x) .. "\n".. math.floor(vehicle_y) .. "\n".. math.floor(vehicle_z) .. "\n"
 
-                    server.removeMapObject(0, vehicle_object.map_id)
-                    server.addMapObject(0, vehicle_object.map_id, 1, 17, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile AI Boat" .. vehicle_id, 2000, debug_data, icon_r, icon_g, icon_b, 255)
+                    server.removeMapObject(-1, vehicle_object.map_id)
+                    server.addMapObject(-1, vehicle_object.map_id, 1, 17, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile AI Boat" .. vehicle_id, 2000, debug_data, icon_r, icon_g, icon_b, 255)
                 end
             end
 
@@ -413,6 +428,15 @@ function updateVehicles()
                 end
             end
         end
+    end
+    g_savedata.victim_vehicles = g_savedata.victim_vehicles or {}
+    for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
+        if victim_vehicle ~= nil then
+            victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
+            server.removeMapID(-1, victim_vehicle.map_id)
+            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+        end
+        
     end
 end
 
@@ -666,11 +690,16 @@ function hasTag(tags, tag)
 	return false
 end
 
-function onVehicleDespawn(vehicle_id, peer_id)
+function killReward(vehicle_id)
     if g_savedata.vehicles[vehicle_id] == nil then
         return
     end
-    local vehicle_data = server.getVehicleData(vehicle_id)
+    local vehicle_data,success = server.getVehicleData(vehicle_id)
+
+    if not success then
+        server.announce("hostile_ai","failed to get vehicle data on despawn")
+        return
+    end
 
     local threat_level = "none"
     for tag_index, tag_object in pairs(vehicle_data.tags) do
@@ -693,6 +722,15 @@ function onVehicleDespawn(vehicle_id, peer_id)
         server.setCurrency(server.getCurrency() + reward_amount)
         cleanupVehicle(vehicle_id)
 	end
+end
+
+function onVehicleDespawn(vehicle_id, peer_id)
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        server.removeMapID(-1, g_savedata.victim_vehicles[vehicle_id].map_id)
+        g_savedata.victim_vehicles[vehicle_id] = nil
+    end
+    
+    killReward(vehicle_id)
 end
 
 function respawnLosses(instant)
@@ -755,5 +793,47 @@ function cleanupVehicle(vehicle_id)
         for _, survivor in pairs(vehicle_object.survivors) do
             server.despawnObject(survivor.id, true)
         end
+    end
+end
+
+function addVictim(vehicle_id,peer_id, x,y,z)
+    if peer_id ~= -1 then
+        g_savedata.victim_vehicles[vehicle_id] = {
+            transform = matrix.translation(x,y,z),
+            map_id = server.getMapID(),
+        }
+        return
+    end
+
+    local vehicle_data, success = server.getVehicleData(vehicle_id)
+    if not success then
+        return
+    end
+    --just in case some other addon adds invulnerable ai vehicle we don't want to attack those
+    if vehicle_data.invulnerable then
+        return
+    end
+    --filter only ai vehicles
+    if hasTag(vehicle_data.tags,"type=ai_boat") or hasTag(vehicle_data.tags,"type=ai_plane") or hasTag(vehicle_data.tags,"type=ai_heli") then
+        --ignore hostile boats or midair refuel planes
+        if (hasTag(vehicle_data.tags,"unique")) then
+            return
+        end
+
+        g_savedata.victim_vehicles[vehicle_id] = {
+            transform = matrix.translation(x,y,z),
+            map_id = server.getMapID(),
+        }
+        return
+    end
+end
+
+function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
+    addVictim(vehicle_id,peer_id,x,y,z)
+end
+
+function onVehicleDespawn(vehicle_id, peer_id)
+	if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        g_savedata.victim_vehicles[vehicle_id] = nil
     end
 end
