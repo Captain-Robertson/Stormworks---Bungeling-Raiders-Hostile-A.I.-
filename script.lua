@@ -8,6 +8,7 @@ respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
+allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
 }
 
 built_locations = {}
@@ -25,8 +26,6 @@ function onCreate(is_world_create)
     end
     if is_world_create then
 
-        
-
 	g_savedata.lt = 5000
 	g_savedata.mt = 10000
 	g_savedata.ht = 20000
@@ -36,8 +35,7 @@ function onCreate(is_world_create)
         server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
         for i = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
 
-            local random_location_index = math.random(1, #built_locations)
-            local location = built_locations[random_location_index]
+            local location = getRandomLocation()
 
             local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
 
@@ -712,9 +710,8 @@ function respawnLosses(instant)
         --reset timer
         g_savedata.respawn_timer = 0
 
-        --get random vehicle
-        local random_location_index = math.random(1, #built_locations)
-        local location = built_locations[random_location_index]
+        --get random vehicle (a location in the playlist corresponds to a vehicle)
+        local location = getRandomLocation()
         
         --get random player position
         local players = server.getPlayers()
@@ -756,4 +753,27 @@ function cleanupVehicle(vehicle_id)
             server.despawnObject(survivor.id, true)
         end
     end
+end
+
+function getRandomLocation()
+    local tries = 0
+    while tries < 10 do
+        --getting a random location, built_location must be contiguous
+        local random_location_index = math.random(1, #built_locations)
+        local location = built_locations[random_location_index]
+        
+        --using an boolean flag here to avoid messy nested if statements when more checks are added
+        local allowed = true
+        --check if it has missiles and missiles are allowed
+        if hasTag(location.objects.vehicle.tags,"missiles") and not g_savedata.allow_missiles then
+            --try again with a different random location
+            allowed = false
+        end
+
+        if allowed then
+            return location
+        end
+        tries = tries + 1
+    end
+    server.announce("hostile_ai","failed to find a suitable vehicle")
 end
