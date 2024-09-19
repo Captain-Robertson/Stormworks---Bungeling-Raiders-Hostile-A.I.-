@@ -431,6 +431,24 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         local result = respawnLosses(true)
         server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
     end
+    if command == "?hostile_ai_settings" then
+        if arg1 ~= nil or arg2 ~= nil then
+            setting_name = arg1
+            new_value = arg2
+            if setting_name == "allow_missiles" then
+                g_savedata.allow_missiles = new_value == "true"
+            elseif setting_name == "max_vehicle_count" then
+                g_savedata.max_vehicle_count = tonumber(new_value)
+            elseif setting_name == "respawn_frequency" then
+                g_savedata.respawn_frequency = tonumber(new_value)
+            end
+        else
+            server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
+        end
+        server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
+        server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
+        server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
+    end
 	if peer_id == -1 then
 		if command == "?hostile_ai_debug" and server.isDev() then
             render_debug = not render_debug
