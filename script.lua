@@ -8,6 +8,7 @@ respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
+allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
 }
 
 built_locations = {}
@@ -25,8 +26,6 @@ function onCreate(is_world_create)
     end
     if is_world_create then
 
-        
-
 	g_savedata.lt = 5000
 	g_savedata.mt = 10000
 	g_savedata.ht = 20000
@@ -36,8 +35,7 @@ function onCreate(is_world_create)
         server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
         for i = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
 
-            local random_location_index = math.random(1, #built_locations)
-            local location = built_locations[random_location_index]
+            local location = getRandomLocation()
 
             local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
 
@@ -433,6 +431,24 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         local result = respawnLosses(true)
         server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
     end
+    if command == "?hostile_ai_settings" then
+        if arg1 ~= nil or arg2 ~= nil then
+            setting_name = arg1
+            new_value = arg2
+            if setting_name == "allow_missiles" then
+                g_savedata.allow_missiles = new_value == "true"
+            elseif setting_name == "max_vehicle_count" then
+                g_savedata.max_vehicle_count = tonumber(new_value)
+            elseif setting_name == "respawn_frequency" then
+                g_savedata.respawn_frequency = tonumber(new_value)
+            end
+        else
+            server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
+        end
+        server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
+        server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
+        server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
+    end
 	if peer_id == -1 then
 		if command == "?hostile_ai_debug" and server.isDev() then
             render_debug = not render_debug
@@ -712,9 +728,8 @@ function respawnLosses(instant)
         --reset timer
         g_savedata.respawn_timer = 0
 
-        --get random vehicle
-        local random_location_index = math.random(1, #built_locations)
-        local location = built_locations[random_location_index]
+        --get random vehicle (a location in the playlist corresponds to a vehicle)
+        local location = getRandomLocation()
         
         --get random player position
         local players = server.getPlayers()
@@ -756,4 +771,27 @@ function cleanupVehicle(vehicle_id)
             server.despawnObject(survivor.id, true)
         end
     end
+end
+
+function getRandomLocation()
+    local tries = 0
+    while tries < 10 do
+        --getting a random location, built_location must be contiguous
+        local random_location_index = math.random(1, #built_locations)
+        local location = built_locations[random_location_index]
+        
+        --using an boolean flag here to avoid messy nested if statements when more checks are added
+        local allowed = true
+        --check if it has missiles and missiles are allowed
+        if hasTag(location.objects.vehicle.tags,"missiles") and not g_savedata.allow_missiles then
+            --try again with a different random location
+            allowed = false
+        end
+
+        if allowed then
+            return location
+        end
+        tries = tries + 1
+    end
+    server.announce("hostile_ai","failed to find a suitable vehicle")
 end
