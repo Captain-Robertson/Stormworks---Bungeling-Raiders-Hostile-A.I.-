@@ -3,12 +3,12 @@
 g_savedata =
 {
 show_markers = property.checkbox("Show hostile vessels on the map", true),
+allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
 vehicles = {},
 respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
-allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
 }
 
 built_locations = {}
