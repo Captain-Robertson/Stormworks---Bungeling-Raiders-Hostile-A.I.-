@@ -8,6 +8,7 @@ vehicles = {},
 respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
+max_vehicle_size = property.slider("Max AI Size (1-small 2-medium 3-large)", 1, 3, 1, 3),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
 }
 
@@ -441,6 +442,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.max_vehicle_count = tonumber(new_value)
             elseif setting_name == "respawn_frequency" then
                 g_savedata.respawn_frequency = tonumber(new_value)
+            elseif setting_name == "max_vehicle_size" then
+                g_savedata.max_vehicle_size = tonumber(new_value)
             end
         else
             server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
@@ -448,6 +451,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
         server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
         server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
+        server.announce("hostile_ai", "max_vehicle_size:"..tostring(g_savedata.max_vehicle_size))
     end
 	if peer_id == -1 then
 		if command == "?hostile_ai_debug" and server.isDev() then
@@ -784,7 +788,14 @@ function getRandomLocation()
         local allowed = true
         --check if it has missiles and missiles are allowed
         if hasTag(location.objects.vehicle.tags,"missiles") and not g_savedata.allow_missiles then
-            --try again with a different random location
+            allowed = false
+        end
+
+        if hasTag(location.objects.vehicle.tags,"size=medium") and g_savedata.max_vehicle_size < 2 then
+            allowed = false
+        end
+
+        if hasTag(location.objects.vehicle.tags,"size=large") and g_savedata.max_vehicle_size < 3 then
             allowed = false
         end
 
@@ -793,5 +804,5 @@ function getRandomLocation()
         end
         tries = tries + 1
     end
-    server.announce("hostile_ai","failed to find a suitable vehicle")
+    server.announce("hostile_ai","failed to find a suitable vehicle to deploy")
 end
