@@ -196,7 +196,6 @@ function onVehicleLoad(vehicle_id)
         g_savedata.victim_vehicles[vehicle_id].damage_threshold = vehicle_data.voxels * 0.75
         g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
     else
-        server.announce("hostile_ai","get position")
         local transform,success = server.getVehiclePos(vehicle_id)
         if not success then
             server.announce("hostile_ai","failed to get transform on load")
@@ -416,7 +415,43 @@ function updateVehicles()
                 end
             end
 
-             if  vehicle_object.current_damage > enemy_vehicle_hp then
+            --find nearest victim vehicle in range
+            local nearest_victim_id = -1
+            local nearest_distance = 4000
+            for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
+                local vehicle_pos, success = server.getVehiclePos(vehicle_id)
+                if victim_vehicle ~= nil and success then
+                    local distance = matrix.distance(victim_vehicle.transform, vehicle_pos)
+                    if distance < nearest_distance then
+                        nearest_victim_id = victim_vehicle_id
+                        nearest_distance = distance
+                    end
+                end
+            end
+            if nearest_victim_id ~= -1 then
+                g_savedata.victim_vehicles[nearest_victim_id].targetted = true
+            end
+            --find gunner npc
+            for npc_index, npc_object in pairs(vehicle_object.survivors) do
+                local npc_data = server.getCharacterData(npc_object.id)
+                if npc_data then
+                    --check npc name contains "Gunner"
+                    if npc_data.name:find("Gunner") then
+                        --check there is a victim in range
+                        if nearest_victim_id ~= -1 then
+                            --set ai to track and fire
+                            server.setAIState(npc_index, 1)
+                            server.setAITargetVehicle(npc_index, nearest_victim_id)
+                        else
+                            --set ai to idle
+                            server.setAIState(npc_index, 0)
+                            server.setAITargetVehicle(npc_index, -1)
+                        end
+                    end
+                end
+            end
+
+            if vehicle_object.current_damage > enemy_vehicle_hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
 
@@ -432,10 +467,12 @@ function updateVehicles()
     for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
         if victim_vehicle ~= nil then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
-            server.removeMapID(-1, victim_vehicle.map_id)
-            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+            if victim_vehicle.targetted then
+                server.removeMapID(-1, victim_vehicle.map_id)
+                server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+                victim_vehicle.targetted = false
+            end
         end
-        
     end
 end
 
