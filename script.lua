@@ -268,10 +268,13 @@ function createPath(vehicle_id)
 end
 
 function updateVehicles()
-    for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
+    local vehicles = g_savedata.vehicles
+    local victim_vehicles = g_savedata.victim_vehicles
+    local update_rate = 120
+    for vehicle_id, vehicle_object in pairs(vehicles) do
 
-        if vehicle_object ~= nil and isTickID(vehicle_id, 30) then
-            vehicle_object.state.timer = vehicle_object.state.timer + 1
+        if vehicle_object ~= nil and isTickID(vehicle_id, update_rate)then
+            vehicle_object.state.timer = vehicle_object.state.timer + update_rate
 
             if vehicle_object.state.s == "pathing" then
 
@@ -421,7 +424,7 @@ function updateVehicles()
 
             local nearest_victim_id = -1
             local nearest_distance = 3000
-            for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
+            for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
                 local vehicle_pos, success = server.getVehiclePos(vehicle_id)
                 if victim_vehicle ~= nil and success then
                     if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
@@ -434,7 +437,7 @@ function updateVehicles()
                 end
             end
             if nearest_victim_id ~= -1 then
-                g_savedata.victim_vehicles[nearest_victim_id].targetted = true
+                victim_vehicles[nearest_victim_id].targetted = true
             end
 
             --find gunner npc
@@ -470,7 +473,7 @@ function updateVehicles()
         end
     end
 
-    for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
+    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
         if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 120) then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
             if victim_vehicle.targetted then
