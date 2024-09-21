@@ -440,12 +440,12 @@ function updateVehicles()
                         --check there is a victim in range
                         if nearest_victim_id ~= -1 then
                             --set ai to track and fire
-                            server.setAIState(npc_index, 1)
-                            server.setAITargetVehicle(npc_index, nearest_victim_id)
+                            server.setAIState(npc_object.id, 1)
+                            server.setAITargetVehicle(npc_object.id, nearest_victim_id)
                         else
                             --set ai to idle
-                            server.setAIState(npc_index, 0)
-                            server.setAITargetVehicle(npc_index, -1)
+                            server.setAIState(npc_object.id, 0)
+                            server.setAITargetVehicle(npc_object.id, -1)
                         end
                     end
                 end
