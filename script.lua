@@ -436,8 +436,10 @@ function updateVehicles()
                     end
                 end
             end
-            if nearest_victim_id ~= -1 then
-                victim_vehicles[nearest_victim_id].targetted = true
+            if not g_savedata.show_markers then
+                if nearest_victim_id ~= -1 then
+                    victim_vehicles[nearest_victim_id].targetted = true
+                end
             end
 
             --find gunner npc
@@ -472,16 +474,19 @@ function updateVehicles()
             end
         end
     end
-
+    --track position of victim vehicles
     for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
-        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 120) then
+        --update every 5 seconds
+        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60*5) then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
-            if victim_vehicle.targetted then
-                server.removeMapID(-1, victim_vehicle.map_id)
-                server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
-                victim_vehicle.targetted = false
-            else
-                server.removeMapID(-1, victim_vehicle.map_id)
+            if not g_savedata.show_markers then
+                if victim_vehicle.targetted then
+                    server.removeMapID(-1, victim_vehicle.map_id)
+                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+                    victim_vehicle.targetted = false
+                else
+                    server.removeMapID(-1, victim_vehicle.map_id)
+                end
             end
         end
     end
@@ -513,6 +518,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
             new_value = arg2
             if setting_name == "allow_missiles" then
                 g_savedata.allow_missiles = new_value == "true"
+            elseif setting_name == "show_markers" then
+                g_savedata.show_markers = new_value == "true"
             elseif setting_name == "max_vehicle_count" then
                 g_savedata.max_vehicle_count = tonumber(new_value)
             elseif setting_name == "respawn_frequency" then
@@ -524,6 +531,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
             server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
         end
         server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
+        server.announce("hostile ai", "show_markers:"..tostring(g_savedata.show_markers))
         server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
         server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
         server.announce("hostile_ai", "max_vehicle_size:"..tostring(g_savedata.max_vehicle_size))
