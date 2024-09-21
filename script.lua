@@ -8,12 +8,15 @@ vehicles = {},
 respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
+victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI Size (1-small 2-medium 3-large)", 1, 3, 1, 3),
 respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
 }
 
 built_locations = {}
 unique_locations = {}
+
+tick_counter = 0
 
 local render_debug = false
 
@@ -190,6 +193,19 @@ function onVehicleLoad(vehicle_id)
 		reload(vehicle_id)
     end
 
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        local vehicle_data = server.getVehicleComponents(vehicle_id)
+        g_savedata.victim_vehicles[vehicle_id].damage_threshold = vehicle_data.voxels * 0.75
+        g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
+    else
+        local transform,success = server.getVehiclePos(vehicle_id)
+        if not success then
+            server.announce("hostile_ai","failed to get transform on load")
+        end
+        local x,y,z = matrix.position(transform)
+        addVictim(vehicle_id,-1,x,y,z)
+    end
+
 end
 
 function createDestination(vehicle_id)
@@ -252,10 +268,13 @@ function createPath(vehicle_id)
 end
 
 function updateVehicles()
-    for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
+    local vehicles = g_savedata.vehicles
+    local victim_vehicles = g_savedata.victim_vehicles
+    local update_rate = 120
+    for vehicle_id, vehicle_object in pairs(vehicles) do
 
-        if vehicle_object ~= nil then
-            vehicle_object.state.timer = vehicle_object.state.timer + 1
+        if vehicle_object ~= nil and isTickID(vehicle_id, update_rate)then
+            vehicle_object.state.timer = vehicle_object.state.timer + update_rate
 
             if vehicle_object.state.s == "pathing" then
 
@@ -401,7 +420,47 @@ function updateVehicles()
                 end
             end
 
-             if  vehicle_object.current_damage > enemy_vehicle_hp then
+            --find nearest victim vehicle in range
+
+            local nearest_victim_id = -1
+            local nearest_distance = 3000
+            for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
+                local vehicle_pos, success = server.getVehiclePos(vehicle_id)
+                if victim_vehicle ~= nil and success then
+                    if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                        local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
+                        if distance < nearest_distance then
+                            nearest_victim_id = victim_vehicle_id
+                            nearest_distance = distance
+                        end
+                    end
+                end
+            end
+            if nearest_victim_id ~= -1 then
+                victim_vehicles[nearest_victim_id].targetted = true
+            end
+
+            --find gunner npc
+            for npc_index, npc_object in pairs(vehicle_object.survivors) do
+                local npc_data = server.getCharacterData(npc_object.id)
+                if npc_data then
+                    --check npc name contains "Gunner"
+                    if npc_data.name:find("Gunner") then
+                        --check there is a victim in range
+                        if nearest_victim_id ~= -1 then
+                            --set ai to track and fire
+                            server.setAIState(npc_object.id, 1)
+                            server.setAITargetVehicle(npc_object.id, nearest_victim_id)
+                        else
+                            --set ai to idle
+                            server.setAIState(npc_object.id, 0)
+                            server.setAITargetVehicle(npc_object.id, -1)
+                        end
+                    end
+                end
+            end
+
+            if vehicle_object.current_damage > enemy_vehicle_hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
 
@@ -413,11 +472,27 @@ function updateVehicles()
             end
         end
     end
+
+    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
+        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 120) then
+            victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
+            if victim_vehicle.targetted then
+                server.removeMapID(-1, victim_vehicle.map_id)
+                server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+                victim_vehicle.targetted = false
+            else
+                server.removeMapID(-1, victim_vehicle.map_id)
+            end
+        end
+    end
+    
 end
 
 function onTick(tick_time)
     updateVehicles()
     respawnLosses(false)
+
+    tick_counter = tick_counter + 1
 end
 
 function onVehicleDamaged(vehicle_id, amount, x, y, z, body_id)
@@ -686,11 +761,16 @@ function hasTag(tags, tag)
 	return false
 end
 
-function onVehicleDespawn(vehicle_id, peer_id)
+function killReward(vehicle_id)
     if g_savedata.vehicles[vehicle_id] == nil then
         return
     end
-    local vehicle_data = server.getVehicleData(vehicle_id)
+    local vehicle_data,success = server.getVehicleData(vehicle_id)
+
+    if not success then
+        server.announce("hostile_ai","failed to get vehicle data on despawn")
+        return
+    end
 
     local threat_level = "none"
     for tag_index, tag_object in pairs(vehicle_data.tags) do
@@ -713,6 +793,15 @@ function onVehicleDespawn(vehicle_id, peer_id)
         server.setCurrency(server.getCurrency() + reward_amount)
         cleanupVehicle(vehicle_id)
 	end
+end
+
+function onVehicleDespawn(vehicle_id, peer_id)
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        server.removeMapID(-1, g_savedata.victim_vehicles[vehicle_id].map_id)
+        g_savedata.victim_vehicles[vehicle_id] = nil
+    end
+    
+    killReward(vehicle_id)
 end
 
 function respawnLosses(instant)
@@ -777,6 +866,42 @@ function cleanupVehicle(vehicle_id)
     end
 end
 
+function addVictim(vehicle_id,peer_id, x,y,z)
+    if peer_id ~= -1 then
+        g_savedata.victim_vehicles[vehicle_id] = {
+            transform = matrix.translation(x,y,z),
+            map_id = server.getMapID(),
+        }
+        return
+    end
+
+    local vehicle_data, success = server.getVehicleData(vehicle_id)
+    if not success then
+        return
+    end
+    --just in case some other addon adds invulnerable ai vehicle we don't want to attack those
+    if vehicle_data.invulnerable then
+        return
+    end
+    --filter only ai vehicles
+    if hasTag(vehicle_data.tags,"type=ai_boat") or hasTag(vehicle_data.tags,"type=ai_plane") or hasTag(vehicle_data.tags,"type=ai_heli") then
+        --ignore hostile boats or midair refuel planes
+        if (hasTag(vehicle_data.tags,"unique")) then
+            return
+        end
+
+        g_savedata.victim_vehicles[vehicle_id] = {
+            transform = matrix.translation(x,y,z),
+            map_id = server.getMapID(),
+        }
+        return
+    end
+end
+
+function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
+    addVictim(vehicle_id,peer_id,x,y,z)
+end
+
 function getRandomLocation()
     local tries = 0
     while tries < 10 do
@@ -805,4 +930,32 @@ function getRandomLocation()
         tries = tries + 1
     end
     server.announce("hostile_ai","failed to find a suitable vehicle to deploy")
+end
+
+function isTickID(id, rate)
+	return (tick_counter + id) % rate == 0
+end
+
+function inGreeyBoxRange(transform_a, transform_b, radius)
+    local x_a,y_a,z_a = matrix.position(transform_a)
+    local x_b,y_b,z_b = matrix.position(transform_b)
+    local dx = x_b - x_a
+    if dx < -radius or dx > radius then
+        return false
+    end
+    local dy = y_b - y_a
+    if dy < -radius or dy > radius then
+        return false
+    end
+    local dz = z_b - z_a
+    if dz < -radius or dz > radius then
+        return false
+    end
+    return true
+end
+
+function manhattanDistance(transform_a, transform_b)
+    local x_a,y_a,z_a = matrix.position(transform_a)
+    local x_b,y_b,z_b = matrix.position(transform_b)
+    return math.abs(x_b-x_a) + math.abs(y_b-y_a) + math.abs(z_b-z_a)
 end
