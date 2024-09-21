@@ -16,6 +16,8 @@ respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
 built_locations = {}
 unique_locations = {}
 
+tick_counter = 0
+
 local render_debug = false
 
 local g_debug_vehicle_id = "0"
@@ -268,7 +270,7 @@ end
 function updateVehicles()
     for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
 
-        if vehicle_object ~= nil then
+        if vehicle_object ~= nil and isTickID(vehicle_id, 30) then
             vehicle_object.state.timer = vehicle_object.state.timer + 1
 
             if vehicle_object.state.s == "pathing" then
@@ -416,21 +418,25 @@ function updateVehicles()
             end
 
             --find nearest victim vehicle in range
+
             local nearest_victim_id = -1
-            local nearest_distance = 4000
+            local nearest_distance = 3000
             for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
                 local vehicle_pos, success = server.getVehiclePos(vehicle_id)
                 if victim_vehicle ~= nil and success then
-                    local distance = matrix.distance(victim_vehicle.transform, vehicle_pos)
-                    if distance < nearest_distance then
-                        nearest_victim_id = victim_vehicle_id
-                        nearest_distance = distance
+                    if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                        local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
+                        if distance < nearest_distance then
+                            nearest_victim_id = victim_vehicle_id
+                            nearest_distance = distance
+                        end
                     end
                 end
             end
             if nearest_victim_id ~= -1 then
                 g_savedata.victim_vehicles[nearest_victim_id].targetted = true
             end
+
             --find gunner npc
             for npc_index, npc_object in pairs(vehicle_object.survivors) do
                 local npc_data = server.getCharacterData(npc_object.id)
@@ -463,22 +469,27 @@ function updateVehicles()
             end
         end
     end
-    g_savedata.victim_vehicles = g_savedata.victim_vehicles or {}
+
     for victim_vehicle_id, victim_vehicle in pairs(g_savedata.victim_vehicles) do
-        if victim_vehicle ~= nil then
+        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 120) then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
             if victim_vehicle.targetted then
                 server.removeMapID(-1, victim_vehicle.map_id)
                 server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
                 victim_vehicle.targetted = false
+            else
+                server.removeMapID(-1, victim_vehicle.map_id)
             end
         end
     end
+    
 end
 
 function onTick(tick_time)
     updateVehicles()
     respawnLosses(false)
+
+    tick_counter = tick_counter + 1
 end
 
 function onVehicleDamaged(vehicle_id, amount, x, y, z, body_id)
@@ -916,4 +927,32 @@ function getRandomLocation()
         tries = tries + 1
     end
     server.announce("hostile_ai","failed to find a suitable vehicle to deploy")
+end
+
+function isTickID(id, rate)
+	return (tick_counter + id) % rate == 0
+end
+
+function inGreeyBoxRange(transform_a, transform_b, radius)
+    local x_a,y_a,z_a = matrix.position(transform_a)
+    local x_b,y_b,z_b = matrix.position(transform_b)
+    local dx = x_b - x_a
+    if dx < -radius or dx > radius then
+        return false
+    end
+    local dy = y_b - y_a
+    if dy < -radius or dy > radius then
+        return false
+    end
+    local dz = z_b - z_a
+    if dz < -radius or dz > radius then
+        return false
+    end
+    return true
+end
+
+function manhattanDistance(transform_a, transform_b)
+    local x_a,y_a,z_a = matrix.position(transform_a)
+    local x_b,y_b,z_b = matrix.position(transform_b)
+    return math.abs(x_b-x_a) + math.abs(y_b-y_a) + math.abs(z_b-z_a)
 end
