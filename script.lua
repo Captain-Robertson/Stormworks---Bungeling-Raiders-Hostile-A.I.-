@@ -6,11 +6,11 @@ show_markers = property.checkbox("Show hostile vessels on the map", true),
 allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
 vehicles = {},
 respawn_timer = 0,
-start_vehicle_count = property.slider("Initial AI Count", 0, 50, 1, 25),
-max_vehicle_count = property.slider("Max AI Count", 0, 50, 1, 25),
+start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
+max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
-max_vehicle_size = property.slider("Max AI Size (1-small 2-medium 3-large)", 1, 3, 1, 3),
-respawn_frequency = property.slider("Respawn Frequency (mins)", 0, 60,1,30),
+max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
+respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
 }
 
 built_locations = {}
@@ -482,7 +482,7 @@ function updateVehicles()
             if not g_savedata.show_markers then
                 if victim_vehicle.targetted then
                     server.removeMapID(-1, victim_vehicle.map_id)
-                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Friendly vessel",500,"Vehicle targetted by the Bungeling Empire", 255,0,255, 255)
+                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Under Attack",500,"A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255,0,0, 255)
                     victim_vehicle.targetted = false
                 else
                     server.removeMapID(-1, victim_vehicle.map_id)
