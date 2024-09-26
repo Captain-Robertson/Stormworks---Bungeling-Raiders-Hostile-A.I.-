@@ -195,7 +195,6 @@ function onVehicleLoad(vehicle_id)
 
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
         local vehicle_data = server.getVehicleComponents(vehicle_id)
-        g_savedata.victim_vehicles[vehicle_id].damage_threshold = vehicle_data.voxels * 0.75
         g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
     else
         local transform,success = server.getVehiclePos(vehicle_id)
@@ -307,7 +306,6 @@ function updateVehicles()
             elseif vehicle_object.state.s == "waiting" then
 
                 local wait_time = 3600
-                if vehicle_object.ai_type == "hospital" then wait_time = 3600 * 30 end
 
                 if vehicle_object.state.timer >= wait_time then
                     vehicle_object.state.timer = 0
@@ -421,42 +419,43 @@ function updateVehicles()
             end
 
             --find nearest victim vehicle in range
-
-            local nearest_victim_id = -1
-            local nearest_distance = 3000
-            for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
-                local vehicle_pos, success = server.getVehiclePos(vehicle_id)
-                if victim_vehicle ~= nil and success then
-                    if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
-                        local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
-                        if distance < nearest_distance then
-                            nearest_victim_id = victim_vehicle_id
-                            nearest_distance = distance
+            if vehicle_object.state.s ~= "pseudo" then
+                local nearest_victim_id = -1
+                local nearest_distance = 3000
+                for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
+                    local vehicle_pos, success = server.getVehiclePos(vehicle_id)
+                    if victim_vehicle ~= nil and success then
+                        if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                            local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
+                            if distance < nearest_distance then
+                                nearest_victim_id = victim_vehicle_id
+                                nearest_distance = distance
+                            end
                         end
                     end
                 end
-            end
-            if not g_savedata.show_markers then
-                if nearest_victim_id ~= -1 then
-                    victim_vehicles[nearest_victim_id].targetted = true
+                if not g_savedata.show_markers then
+                    if nearest_victim_id ~= -1 then
+                        victim_vehicles[nearest_victim_id].targetted = true
+                    end
                 end
-            end
 
-            --find gunner npc
-            for npc_index, npc_object in pairs(vehicle_object.survivors) do
-                local npc_data = server.getCharacterData(npc_object.id)
-                if npc_data then
-                    --check npc name contains "Gunner"
-                    if npc_data.name:find("Gunner") then
-                        --check there is a victim in range
-                        if nearest_victim_id ~= -1 then
-                            --set ai to track and fire
-                            server.setAIState(npc_object.id, 1)
-                            server.setAITargetVehicle(npc_object.id, nearest_victim_id)
-                        else
-                            --set ai to idle
-                            server.setAIState(npc_object.id, 0)
-                            server.setAITargetVehicle(npc_object.id, -1)
+                --find gunner npc
+                for npc_index, npc_object in pairs(vehicle_object.survivors) do
+                    local npc_data = server.getCharacterData(npc_object.id)
+                    if npc_data then
+                        --check npc name contains "Gunner"
+                        if npc_data.name:find("Gunner") then
+                            --check there is a victim in range
+                            if nearest_victim_id ~= -1 then
+                                --set ai to track and fire
+                                server.setAIState(npc_object.id, 1)
+                                server.setAITargetVehicle(npc_object.id, nearest_victim_id)
+                            else
+                                --set ai to idle
+                                server.setAIState(npc_object.id, 0)
+                                server.setAITargetVehicle(npc_object.id, -1)
+                            end
                         end
                     end
                 end
