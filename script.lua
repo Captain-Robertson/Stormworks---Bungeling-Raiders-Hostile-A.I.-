@@ -174,6 +174,7 @@ function onVehicleUnload(vehicle_id)
         vehicle_object.state.s = "pseudo"
     end
 
+    g_savedata.victim_vehicles[vehicle_id] = nil
 end
 
 function onVehicleLoad(vehicle_id)
@@ -192,17 +193,18 @@ function onVehicleLoad(vehicle_id)
         refuel(vehicle_id)
 		reload(vehicle_id)
     end
-
+    --check if vehicle loaded is registered as a victim
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
         local vehicle_data = server.getVehicleComponents(vehicle_id)
         g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
     else
+        --if not a victim check it can be
         local transform,success = server.getVehiclePos(vehicle_id)
-        if not success then
-            server.announce("hostile_ai","failed to get transform on load")
+        if success then
+            --successfull got position of the vehicle
+            local x,y,z = matrix.position(transform)
+            addVictim(vehicle_id,-1,x,y,z)
         end
-        local x,y,z = matrix.position(transform)
-        addVictim(vehicle_id,-1,x,y,z)
     end
 
 end
