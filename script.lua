@@ -473,10 +473,21 @@ function trackVictims()
     
 end
 
+function changeFriendlyFrequency()
+    --change every 6 seconds 
+    if isTickID(0, 60 * 6) then
+        friendly_frequency = math.random(100,999)
+        for vehicle_id, vehicle_object in pairs(vehicles) do
+            server.setVehicleKeypad(vehicle_id, "friendly frequency", friendly_frequency)
+        end
+    end
+end
+
 function onTick(tick_time)
     updateVehicles()
     trackVictims()
     respawnLosses(false)
+    changeFriendlyFrequency()
     tick_counter = tick_counter + 1
 end
 
