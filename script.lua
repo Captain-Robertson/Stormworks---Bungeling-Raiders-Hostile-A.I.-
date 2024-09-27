@@ -11,16 +11,19 @@ max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
 respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
+sink_mode = property.checkbox("Let hostiles sink before despawning", false)
 }
 
-built_locations = {}
-unique_locations = {}
+local built_locations = {}
+local unique_locations = {}
 
-tick_counter = 0
+local tick_counter = 0
 
 local render_debug = false
 
 local g_debug_vehicle_id = "0"
+
+local friendly_frequency = 999
 
 function onCreate(is_world_create)
     for i in iterPlaylists() do
@@ -475,6 +478,10 @@ function updateVehicles()
             end
         end
     end
+end
+
+function trackVictims()
+    local victim_vehicles = g_savedata.victim_vehicles
     --track position of victim vehicles
     for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
         --update every 5 seconds
@@ -496,8 +503,8 @@ end
 
 function onTick(tick_time)
     updateVehicles()
+    trackVictims()
     respawnLosses(false)
-
     tick_counter = tick_counter + 1
 end
 
