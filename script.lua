@@ -10,8 +10,14 @@ start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
-respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
-sink_mode = property.checkbox("Let hostiles sink before despawning", false)
+respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30)
+}
+
+local reward_table = {
+    ["low"] = 5000,
+    ["medium"] = 10000,
+    ["high"] = 20000,
+    ["extreme"] = 30000
 }
 
 local built_locations = {}
@@ -32,13 +38,6 @@ function onCreate(is_world_create)
         end
     end
     if is_world_create then
-
-	g_savedata.lt = 5000
-	g_savedata.mt = 10000
-	g_savedata.ht = 20000
-	g_savedata.et = 30000
-
-        
         server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
         for i = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
 
@@ -50,37 +49,7 @@ function onCreate(is_world_create)
             spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
             if is_success then
-                local all_mission_objects = {}
-                local spawned_objects = {
-                    vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
-                    survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
-                    objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
-                    zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
-                }
-
-                g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
-            end
-        end
-
-        for i = 1, #unique_locations do
-
-            local location = unique_locations[i]
-
-            local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
-
-            local spawn_transform, is_success = server.getOceanTransform(random_transform, 1000, 10000)
-            spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
-
-            if is_success then
-                local all_mission_objects = {}
-                local spawned_objects = {
-                    vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
-                    survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
-                    objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
-                    zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
-                }
-
-                g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 },  path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
+                spawnVehicle(location, spawn_transform)
             end
         end
     else
@@ -102,8 +71,10 @@ function onCreate(is_world_create)
             end
             if vehicle_object.current_damage == nil then vehicle_object.current_damage = 0 end
             if vehicle_object.despawn_timer == nil then vehicle_object.despawn_timer = 0 end
+            if vehicle_object.reward == nil then
+                setReward(vehicle_id)
+            end
         end
-
     end
 end
 
@@ -177,7 +148,7 @@ function onVehicleUnload(vehicle_id)
         vehicle_object.state.s = "pseudo"
     end
 
-    g_savedata.victim_vehicles[vehicle_id] = nil
+    removeVictim(vehicle_id)
 end
 
 function onVehicleLoad(vehicle_id)
@@ -423,8 +394,9 @@ function updateVehicles()
                 end
             end
 
-            --find nearest victim vehicle in range
+            
             if vehicle_object.state.s ~= "pseudo" then
+                --find nearest victim vehicle in range
                 local nearest_victim_id = -1
                 local nearest_distance = 3000
                 for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
@@ -781,43 +753,19 @@ function killReward(vehicle_id)
     if g_savedata.vehicles[vehicle_id] == nil then
         return
     end
-    local vehicle_data,success = server.getVehicleData(vehicle_id)
 
-    if not success then
-        server.announce("hostile_ai","failed to get vehicle data on despawn")
-        return
-    end
-
-    local threat_level = "none"
-    for tag_index, tag_object in pairs(vehicle_data.tags) do
-        if tag_object:find("threat=") ~= nil then
-            threat_level = tag_object:gsub("threat=","")
-        end
-    end
-    local reward_amount = 0
-    if threat_level == "low" then
-        reward_amount = g_savedata.lt
-    elseif threat_level == "medium" then
-        reward_amount = g_savedata.mt
-		elseif threat_level == "high" then
-        reward_amount = g_savedata.ht
-    elseif threat_level == "extreme" then
-        reward_amount = g_savedata.et
-    end
-	if reward_amount > 1 then
+    local reward_amount = g_savedata.vehicles[vehicle_id].reward
+	if reward_amount > 0 then
         server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
-        cleanupVehicle(vehicle_id)
 	end
 end
 
 function onVehicleDespawn(vehicle_id, peer_id)
-    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
-        server.removeMapID(-1, g_savedata.victim_vehicles[vehicle_id].map_id)
-        g_savedata.victim_vehicles[vehicle_id] = nil
-    end
+    removeVictim(vehicle_id)
     
     killReward(vehicle_id)
+    cleanupVehicle(vehicle_id)
 end
 
 function respawnLosses(instant)
@@ -840,6 +788,10 @@ function respawnLosses(instant)
         --get random vehicle (a location in the playlist corresponds to a vehicle)
         local location = getRandomLocation()
         
+        if location == nil then
+            return -1
+        end
+
         --get random player position
         local players = server.getPlayers()
 	    local random_player = players[math.random(1, #players)]
@@ -851,23 +803,16 @@ function respawnLosses(instant)
         local spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
         if is_success then
-            --spawn vehicle and every object attached to it
-            local all_mission_objects = {}
-            local spawned_objects = {
-                vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
-                survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
-                objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
-                zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
-            }
-            --store the vehicle data into our table
-            g_savedata.vehicles[spawned_objects.vehicle.id] = {survivors = spawned_objects.survivors, destination = { x = 0, z = 0 }, path = {}, map_id = server.getMapID(), state = { s = "pseudo", timer = math.fmod(spawned_objects.vehicle.id, 300) }, bounds = location.objects.vehicle.bounds, size = spawned_objects.vehicle.size, current_damage = 0, despawn_timer = 0, ai_type = spawned_objects.vehicle.ai_type }
-            return spawned_objects.vehicle.id
+            return spawnVehicle(location,spawn_transform)
         end
         return -1
 	end
 end
 
 function cleanupVehicle(vehicle_id)
+    if g_savedata.vehicles[vehicle_id] == nil then
+        return
+    end
     vehicle_object = g_savedata.vehicles[vehicle_id]
     g_savedata.vehicles[vehicle_id] = nil
 
@@ -914,6 +859,13 @@ function addVictim(vehicle_id,peer_id, x,y,z)
     end
 end
 
+function removeVictim(vehicle_id)
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        server.removeMapID(-1, g_savedata.victim_vehicles[vehicle_id].map_id)
+        g_savedata.victim_vehicles[vehicle_id] = nil
+    end
+end
+
 function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
     addVictim(vehicle_id,peer_id,x,y,z)
 end
@@ -946,6 +898,7 @@ function getRandomLocation()
         tries = tries + 1
     end
     server.announce("hostile_ai","failed to find a suitable vehicle to deploy")
+    return nil
 end
 
 function isTickID(id, rate)
@@ -974,4 +927,51 @@ function manhattanDistance(transform_a, transform_b)
     local x_a,y_a,z_a = matrix.position(transform_a)
     local x_b,y_b,z_b = matrix.position(transform_b)
     return math.abs(x_b-x_a) + math.abs(y_b-y_a) + math.abs(z_b-z_a)
+end
+
+function spawnVehicle(location, spawn_transform)
+    --spawn vehicle and every object attached to it
+    local all_mission_objects = {}
+    local spawned_objects = {
+        vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
+        survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
+        objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
+        zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
+    }
+    local vehicle_id = spawned_objects.vehicle.id
+
+    --store the vehicle data into our table
+    g_savedata.vehicles[vehicle_id] = {
+        survivors = spawned_objects.survivors, 
+        destination = { x = 0, z = 0 }, 
+        path = {}, 
+        map_id = server.getMapID(), 
+        state = { 
+            s = "pseudo", 
+            timer = math.fmod(spawned_objects.vehicle.id, 300) 
+        }, 
+        bounds = location.objects.vehicle.bounds, 
+        size = spawned_objects.vehicle.size, 
+        current_damage = 0, 
+        despawn_timer = 0, 
+        ai_type = spawned_objects.vehicle.ai_type
+    }
+
+    setReward(vehicle_id)
+
+    return vehicle_id
+end
+
+function setReward(vehicle_id)
+    local vehicle_data,success = server.getVehicleData(vehicle_id)
+    if not success then
+        server.announce("hostile_ai","failed to get vehicle data when setting reward")
+    end
+    local threat_level = "none"
+    for tag_index, tag_object in pairs(vehicle_data.tags) do
+        if tag_object:find("threat=") ~= nil then
+            threat_level = tag_object:gsub("threat=","")
+        end
+    end
+    g_savedata.vehicles[vehicle_id].reward = reward_table[threat_level]
 end
