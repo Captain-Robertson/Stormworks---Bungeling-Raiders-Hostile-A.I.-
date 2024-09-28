@@ -575,6 +575,7 @@ function refuel(vehicle_id)
     server.setVehicleTank(vehicle_id, "diesel1", 999, 1)
     server.setVehicleTank(vehicle_id, "diesel2", 999, 1)
     server.setVehicleBattery(vehicle_id, "battery1", 1)
+    server.setVehicleBattery(vehicle_id, "battery2", 1)
 end
 
 function reload(vehicle_id)
