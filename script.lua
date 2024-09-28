@@ -474,6 +474,7 @@ function trackVictims()
 end
 
 function changeFriendlyFrequency()
+    local vehicles = g_savedata.vehicles
     --change every 6 seconds 
     if isTickID(0, 60 * 6) then
         friendly_frequency = math.random(100,999)
