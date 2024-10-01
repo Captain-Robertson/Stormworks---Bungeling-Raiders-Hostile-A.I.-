@@ -13,19 +13,10 @@ max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large
 respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30)
 }
 
-local reward_table = {
-    ["low"] = 5000,
-    ["medium"] = 10000,
-    ["high"] = 20000,
-    ["extreme"] = 30000
-}
-
 local built_locations = {}
 local unique_locations = {}
 
 local tick_counter = 0
-
-local render_debug = false
 
 local g_debug_vehicle_id = "0"
 
@@ -54,7 +45,11 @@ function onCreate(is_world_create)
         end
     else
         for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
-
+            local vehicle_data,success = server.getVehicleData(vehicle_id)
+            if not success then
+                server.announce("hostile_ai","failed to get vehicle data when initiating")
+                vehicle_data = nil
+            end
             if vehicle_object.path == nil then
                 if createDestination(vehicle_id) then
                     vehicle_object.path = createPath(vehicle_id)
@@ -71,9 +66,14 @@ function onCreate(is_world_create)
             end
             if vehicle_object.current_damage == nil then vehicle_object.current_damage = 0 end
             if vehicle_object.despawn_timer == nil then vehicle_object.despawn_timer = 0 end
-            if vehicle_object.reward == nil then
-                setReward(vehicle_id)
+            if vehicle_data ~= nil then
+                if vehicle_object.reward == nil then
+                    setReward(vehicle_id, vehicle_data)
+                end
+                setAIType(vehicle_id, vehicle_data)
+                setSizeData(vehicle_id,vehicle_data)
             end
+            
         end
     end
 end
@@ -219,26 +219,6 @@ function createPath(vehicle_id)
         path.ui_id = server.getMapID()
     end
 
-    if render_debug then
-        if tostring(vehicle_id) == g_debug_vehicle_id or g_debug_vehicle_id == tostring(0) then
-            if(#vehicle_object.path >= 1) then
-                server.removeMapLine(0, vehicle_object.map_id)
-                server.addMapLine(0, vehicle_object.map_id, vehicle_pos, matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z), 0.5, 0, 0, 255, 255)
-
-                for i = 1, #vehicle_object.path - 1 do
-                    local waypoint = vehicle_object.path[i]
-                    local waypoint_next = vehicle_object.path[i + 1]
-
-                    local waypoint_pos = matrix.translation(waypoint.x, waypoint.y, waypoint.z)
-                    local waypoint_pos_next = matrix.translation(waypoint_next.x, waypoint_next.y, waypoint_next.z)
-
-                    server.removeMapLine(0, waypoint.ui_id)
-                    server.addMapLine(0, waypoint.ui_id, waypoint_pos, waypoint_pos_next, 0.5, 0, 0, 255, 255)
-                end
-            end
-        end
-    end
-
    return path_list
 end
 
@@ -286,11 +266,6 @@ function updateVehicles()
                 if vehicle_object.state.timer >= wait_time then
                     vehicle_object.state.timer = 0
 
-                    if render_debug then
-                        for i = 1, #vehicle_object.path - 1 do
-                            server.removeMapLine(0, vehicle_object.path[i].ui_id)
-                        end
-                    end
 
                     if createDestination(vehicle_id) then
                         vehicle_object.path = createPath(vehicle_id)
@@ -346,55 +321,16 @@ function updateVehicles()
                     end
                 end
             end
-			
-			local enemy_vehicle_hp = 4000
-			marker_radius = 2000
-			explosion_size = 0.6
-			icon_r = 255
-			icon_g = 255
-			icon_b = 0
-            if vehicle_object.size == "large" then
-                enemy_vehicle_hp = 100000
-				marker_radius = 2000
-				explosion_size = 1.5
-				icon_r = 255
-				icon_g = 0
-				icon_b = 0
-			end
-            if vehicle_object.size == "medium" then
-                enemy_vehicle_hp = 10000
-				marker_radius = 2000
-				explosion_size = 1.0
-				icon_r = 255
-				icon_g = 125
-				icon_b = 0
-            end
+
+            
 
             if g_savedata.show_markers then
 				local vehicle_pos = server.getVehiclePos(vehicle_id)
                 local vehicle_x, vehicle_y, vehicle_z = matrix.position(vehicle_pos)
 
-                    server.removeMapObject(-1, vehicle_object.map_id)
-                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile vessel sighted", marker_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed.", icon_r, icon_g, icon_b, 255)
+                server.removeMapObject(-1, vehicle_object.map_id)
+                server.addMapObject(-1, vehicle_object.map_id, 1, 18, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed.", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
              end
-            			
-            if render_debug then
-                if tostring(vehicle_id) == g_debug_vehicle_id or g_debug_vehicle_id == tostring(0) then
-
-                    local vehicle_pos = server.getVehiclePos(vehicle_id)
-                    local vehicle_x, vehicle_y, vehicle_z = matrix.position(vehicle_pos)
-
-                    local debug_data = vehicle_object.state.s .. " : " .. vehicle_object.state.timer .. "\n"
-
-                    if vehicle_object.size then debug_data = debug_data .. "Size: " .. vehicle_object.size .. "\n" end
-                    debug_data = debug_data .. "Pos: " .. math.floor(vehicle_x) .. "\n".. math.floor(vehicle_y) .. "\n".. math.floor(vehicle_z) .. "\n"
-
-                    server.removeMapObject(0, vehicle_object.map_id)
-                    server.addMapObject(0, vehicle_object.map_id, 1, 17, v_x, v_z, 0, 0, vehicle_id, 0, "Hostile AI Boat" .. vehicle_id, 2000, debug_data, icon_r, icon_g, icon_b, 255)
-                end
-            end
-
-            
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
                 local nearest_victim_id = -1
@@ -438,13 +374,17 @@ function updateVehicles()
                 end
             end
 
-            if vehicle_object.current_damage > enemy_vehicle_hp then
+            if vehicle_object.current_damage > vehicle_object.hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
 
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 60 * 2) then
                 local vehicle_pos = server.getVehiclePos(vehicle_id)
-                if vehicle_pos[14] < -22 or vehicle_object.despawn_timer > 2 * 1 * 1 then
+                local crush_depth = -22
+                if vehicle_object.ai_type == "submarine" then
+                    crush_depth = -100
+                end
+                if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 60 * 60 * 2 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
@@ -528,46 +468,10 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
         server.announce("hostile_ai", "max_vehicle_size:"..tostring(g_savedata.max_vehicle_size))
     end
-	if peer_id == -1 then
-		if command == "?hostile_ai_debug" and server.isDev() then
-            render_debug = not render_debug
-
-            if arg1 ~= nil then
-                g_debug_vehicle_id = arg1
-            else
-                g_debug_vehicle_id = tostring(0)
-            end
-
-            for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
-                server.removeMapObject(0, vehicle_object.map_id)
-                server.removeMapLine(0, vehicle_object.map_id)
-                for i = 1, #vehicle_object.path - 1 do
-                    server.removeMapLine(0, vehicle_object.path[i].ui_id)
-                end
-
-                if render_debug then
-                    if tostring(vehicle_id) == g_debug_vehicle_id or g_debug_vehicle_id == tostring(0) then
-                        local vehicle_pos = server.getVehiclePos(vehicle_id)
-                        if(#vehicle_object.path >= 1) then
-                            server.removeMapLine(0, vehicle_object.map_id)
-                            server.addMapLine(0, vehicle_object.map_id, vehicle_pos, matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z), 0.5, 0, 0, 255, 255)
-    
-                            for i = 1, #vehicle_object.path - 1 do
-                                local waypoint = vehicle_object.path[i]
-                                local waypoint_next = vehicle_object.path[i + 1]
-    
-                                local waypoint_pos = matrix.translation(waypoint.x, waypoint.y, waypoint.z)
-                                local waypoint_pos_next = matrix.translation(waypoint_next.x, waypoint_next.y, waypoint_next.z)
-    
-                                server.removeMapLine(0, waypoint.ui_id)
-                                server.addMapLine(0, waypoint.ui_id, waypoint_pos, waypoint_pos_next, 0.5, 0, 0, 255, 255)
-                            end
-                        end
-                    end
-                end
-            end
+    if command == "?hostile_ai_clear" then
+        for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
+            server.despawnVehicle(vehicle_id, true)
         end
-        
     end
 end
 
@@ -579,7 +483,6 @@ function refuel(vehicle_id)
 end
 
 function reload(vehicle_id)
-	if render_debug then server.announce("decw", "reloaded: " .. vehicle_id) end
 	for i=1, 15 do
 		server.setVehicleWeapon(vehicle_id, "Ammo "..i, 999)
 	end
@@ -648,12 +551,12 @@ function spawnObject(spawn_transform, playlist_index, location_index, object, pa
 			end
 		end
 
-        local l_ai_type = "default"
-		if hasTag(object.tags, "capability=hospital") then
-			l_ai_type = "hospital"
-		end
-
-		local object_data = { type = object.type, id = spawned_object_id, component_id = object.id, size = l_size, ai_type = l_ai_type }
+		local object_data = { 
+            type = object.type, 
+            id = spawned_object_id, 
+            component_id = object.id, 
+            size = l_size 
+        }
 
 		if spawned_objects ~= nil then
 			table.insert(spawned_objects, object_data)
@@ -823,20 +726,18 @@ function respawnLosses(instant)
 end
 
 function cleanupVehicle(vehicle_id)
-    if g_savedata.vehicles[vehicle_id] == nil then
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object == nil then
         return
     end
-    vehicle_object = g_savedata.vehicles[vehicle_id]
     g_savedata.vehicles[vehicle_id] = nil
 
     local vehicle_pos = server.getVehiclePos(vehicle_id)
-    server.spawnExplosion(vehicle_pos, explosion_size)
+    server.spawnExplosion(vehicle_pos, vehicle_object.explosion_size)
 
-    if vehicle_object ~= nil then
-        server.removeMapObject(-1, vehicle_object.map_id)
-        for _, survivor in pairs(vehicle_object.survivors) do
-            server.despawnObject(survivor.id, true)
-        end
+    server.removeMapObject(-1, vehicle_object.map_id)
+    for _, survivor in pairs(vehicle_object.survivors) do
+        server.despawnObject(survivor.id, true)
     end
 end
 
@@ -969,22 +870,64 @@ function spawnVehicle(location, spawn_transform)
         despawn_timer = 0, 
         ai_type = spawned_objects.vehicle.ai_type
     }
-
-    setReward(vehicle_id)
-
+    local vehicle_data,success = server.getVehicleData(vehicle_id)
+    if not success then
+        server.announce("hostile_ai","failed to get vehicle data when spawning")
+    else
+        setReward(vehicle_id, vehicle_data)
+        setAIType(vehicle_id, vehicle_data)
+        setSizeData(vehicle_id, vehicle_data)
+    end
     return vehicle_id
 end
 
-function setReward(vehicle_id)
-    local vehicle_data,success = server.getVehicleData(vehicle_id)
-    if not success then
-        server.announce("hostile_ai","failed to get vehicle data when setting reward")
-    end
+function setReward(vehicle_id,vehicle_data)
     local threat_level = "none"
     for tag_index, tag_object in pairs(vehicle_data.tags) do
         if tag_object:find("threat=") ~= nil then
             threat_level = tag_object:gsub("threat=","")
         end
     end
-    g_savedata.vehicles[vehicle_id].reward = reward_table[threat_level]
+    local threat_to_reward = {
+        ["low"] = 5000,
+        ["medium"] = 10000,
+        ["high"] = 20000,
+        ["extreme"] = 30000
+    }
+    g_savedata.vehicles[vehicle_id].reward = threat_to_reward[threat_level]
+end
+
+function setAIType(vehicle_id, vehicle_data)
+    local _ai_type = "default"
+    for tag_index, tag_object in pairs(vehicle_data.tags) do
+        if tag_object == "submarine" then
+            _ai_type = "submarine"
+        end
+    end
+    g_savedata.vehicles[vehicle_id].ai_type = _ai_type
+end
+
+function setSizeData(vehicle_id, vehicle_data)
+    --set vehicle data that depends on the size
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object ~= nil then
+        if vehicle_object.size == "small" then
+            g_savedata.vehicles[vehicle_id].hp = 4000
+            g_savedata.vehicles[vehicle_id].vision_radius = 2000
+            g_savedata.vehicles[vehicle_id].explosion_size = 0.6
+            g_savedata.vehicles[vehicle_id].icon_colour = {255,255,0}
+        elseif vehicle_object.size == "medium" then
+            g_savedata.vehicles[vehicle_id].hp = 10000
+            g_savedata.vehicles[vehicle_id].vision_radius = 2000
+            g_savedata.vehicles[vehicle_id].explosion_size = 1.0
+            g_savedata.vehicles[vehicle_id].icon_colour = {255,125,0}
+        elseif vehicle_object.size == "large" then
+            g_savedata.vehicles[vehicle_id].hp = 100000
+            g_savedata.vehicles[vehicle_id].vision_radius = 2000
+            g_savedata.vehicles[vehicle_id].explosion_size = 1.5
+            g_savedata.vehicles[vehicle_id].icon_colour = {255,0,0}
+        else
+            server.announce("hostile_ai","unexpected vehicle size")
+        end
+    end
 end
