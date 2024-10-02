@@ -4,6 +4,7 @@ g_savedata =
 {
 show_markers = property.checkbox("Show hostile vessels on the map", true),
 allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
+allow_submarines = property.checkbox("Allow hostile submarine vessels", true),
 vehicles = {},
 respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
@@ -378,13 +379,13 @@ function updateVehicles()
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
 
-            if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 60 * 2) then
+            if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) then
                 local vehicle_pos = server.getVehiclePos(vehicle_id)
                 local crush_depth = -22
                 if vehicle_object.ai_type == "submarine" then
                     crush_depth = -100
                 end
-                if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 60 * 60 * 2 then
+                if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
@@ -458,11 +459,14 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.respawn_frequency = tonumber(new_value)
             elseif setting_name == "max_vehicle_size" then
                 g_savedata.max_vehicle_size = tonumber(new_value)
+            elseif setting_name == "allow_submarines" then
+                g_savedata.allow_submarines = new_value == "true"
             end
         else
             server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
         end
         server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
+        server.announce("hostile ai", "allow_submarines:"..tostring(g_savedata.allow_submarines))
         server.announce("hostile ai", "show_markers:"..tostring(g_savedata.show_markers))
         server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
         server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
@@ -791,18 +795,23 @@ function getRandomLocation()
         local random_location_index = math.random(1, #built_locations)
         local location = built_locations[random_location_index]
         
+        local tags = location.objects.vehicle.tags
         --using an boolean flag here to avoid messy nested if statements when more checks are added
         local allowed = true
         --check if it has missiles and missiles are allowed
-        if hasTag(location.objects.vehicle.tags,"missiles") and not g_savedata.allow_missiles then
+        if hasTag(tags,"missiles") and not g_savedata.allow_missiles then
             allowed = false
         end
 
-        if hasTag(location.objects.vehicle.tags,"size=medium") and g_savedata.max_vehicle_size < 2 then
+        if hasTag(tags,"size=medium") and g_savedata.max_vehicle_size < 2 then
             allowed = false
         end
 
-        if hasTag(location.objects.vehicle.tags,"size=large") and g_savedata.max_vehicle_size < 3 then
+        if hasTag(tags,"size=large") and g_savedata.max_vehicle_size < 3 then
+            allowed = false
+        end
+
+        if hasTag(tags, "submarine") and not g_savedata.allow_submarines then
             allowed = false
         end
 
