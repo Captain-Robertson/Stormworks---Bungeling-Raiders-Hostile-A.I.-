@@ -160,6 +160,15 @@ function onVehicleUnload(vehicle_id)
     removeVictim(vehicle_id)
 end
 
+function onPlayerSit(peer_id, vehicle_id, seat_name)
+    local transform,success = server.getVehiclePos(vehicle_id)
+    if success then
+        --successfull got position of the vehicle
+        local x,y,z = matrix.position(transform)
+        addVictim(vehicle_id,peer_id,x,y,z)
+    end
+end
+
 function onVehicleLoad(vehicle_id)
 
     local vehicle_object = g_savedata.vehicles[vehicle_id]
