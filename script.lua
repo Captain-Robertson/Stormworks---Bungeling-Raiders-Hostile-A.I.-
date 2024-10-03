@@ -208,24 +208,26 @@ function createCombatDestination(vehicle_id)
         server.announce("hostile_ai", "failed to find target transform")
         return false
     end
-    local target_x,_,target_z = matrix.position(target_transform)
+
     local vehicle_transform, vehicle_success = server.getVehiclePos(vehicle_id)
     if not vehicle_success then
         server.announce("hostile_ai", "failed to find target transform")
         return false
     end
-    local _, altitude, _ = matrix.position(vehicle_transform)
+    local target_x,_,target_z = matrix.position(target_transform)
+    local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
     local orbit_direction = (vehicle_id % 2) * 2 - 1
     local orbit_rotation = matrix.rotationY(math.rad(45)*orbit_direction)
-    local orbit_delta = matrix.multiply(orbit_rotation, matrix.translation(0,0,vehicle_object.orbit_radius))
-    local delta_x, _, delta_z = matrix.position(orbit_delta)
-    local target_pos = matrix.translation(target_x+delta_x,altitude,target_z+delta_z)
-    local destination_pos = matrix.multiply(target_pos, matrix.translation(math.random(-20, 20), 0, math.random(-20, 20)))
-    local dest_x, _, dest_z = matrix.position(destination_pos)
-    dest_x = target_x
-    dest_z = target_z
-    vehicle_object.destination.x = dest_x
-    vehicle_object.destination.z = dest_z
+    local delta_x = vehicle_x - target_x
+    local delta_z = vehicle_z - target_z
+    local distance = math.sqrt(delta_x^2 + delta_z^2)
+    delta_x = delta_x / distance * vehicle_object.orbit_radius
+    delta_z = delta_z / distance * vehicle_object.orbit_radius
+    local orbit_offset = matrix.multiply(orbit_rotation, matrix.translation(delta_x,0,delta_z))
+    local offset_x,_,offset_z = matrix.position(orbit_offset)
+
+    vehicle_object.destination.x = target_x + offset_x + math.random(-20, 20)
+    vehicle_object.destination.z = target_z + offset_z + math.random(-20, 20)
 
     return true
 end
