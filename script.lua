@@ -275,18 +275,19 @@ function updateVehicles()
     local update_rate = 60 * 2
     for vehicle_id, vehicle_object in pairs(vehicles) do
 
-        if vehicle_object ~= nil and isTickID(vehicle_id, update_rate)then
+        if vehicle_object ~= nil and isTickID(vehicle_id, update_rate) then
             vehicle_object.state.timer = vehicle_object.state.timer + update_rate
             local in_combat = vehicle_object.state.s == "combat"
+            local hp = vehicle_object.hp
+            if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
+                hp = hp * g_savedata.hp_modifier
+            end
+            local too_damaged = vehicle_object.current_damage > hp * 0.75
             if vehicle_object.state.s == "pathing" or in_combat then
 
                 if #vehicle_object.path > 0 then
 
-                    if vehicle_object.state.timer >= 60 * 5 or in_combat then
-
-                        vehicle_object.state.timer = 0
-
-                        k1 = true
+                    if isTickID(vehicle_id, update_rate*2) or in_combat then
 
                         local vehicle_pos = server.getVehiclePos(vehicle_id)
                         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
@@ -297,32 +298,38 @@ function updateVehicles()
                         reload(vehicle_id)
 
                         if distance < 100 then
+                            vehicle_object.state.timer = 0
                             table.remove(vehicle_object.path, 1)
+                        elseif vehicle_object.state.timer > 60 * 60 * 5 then
+                            server.despawnVehicle(vehicle_id, true)
                         end
-                    end
-                elseif in_combat and vehicle_object.target ~= nil then
-                    server.setAIState(vehicle_object.survivors[1].id, 0)
-                    if createCombatDestination(vehicle_id) then
-                        vehicle_object.path = createPath(vehicle_id)
-                        if server.getVehicleSimulating(vehicle_id) then
-                            vehicle_object.state.s = "combat"
-                        else
-                            vehicle_object.state.s = "pseudo"
-                        end
-
-                        refuel(vehicle_id)
-                        reload(vehicle_id)
                     end
                 else
-                    vehicle_object.state.s = "waiting"
                     server.setAIState(vehicle_object.survivors[1].id, 0)
+                    --keep orbiting if is in combat and not too damaged
+                    if in_combat and vehicle_object.target ~= nil and not too_damaged then
+                        server.setAIState(vehicle_object.survivors[1].id, 0)
+                        if createCombatDestination(vehicle_id) then
+                            vehicle_object.path = createPath(vehicle_id)
+                            if server.getVehicleSimulating(vehicle_id) then
+                                vehicle_object.state.s = "combat"
+                            else
+                                vehicle_object.state.s = "pseudo"
+                            end
+
+                            refuel(vehicle_id)
+                            reload(vehicle_id)
+                        end
+                    else
+                        vehicle_object.state.s = "waiting"
+                    end
                 end
 
             elseif vehicle_object.state.s == "waiting" then
 
                 local wait_time = 60 * 60 * 1
-
-                if vehicle_object.state.timer >= wait_time then
+                --either waited enough or fleeing because took too much damage
+                if vehicle_object.state.timer >= wait_time or too_damaged then
                     vehicle_object.state.timer = 0
                     if createDestination(vehicle_id) then
                         vehicle_object.path = createPath(vehicle_id)
@@ -382,7 +389,7 @@ function updateVehicles()
 
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
-                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, vehicle_object.state.s .." " .."Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed.", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, vehicle_object.state.s .." " .."Hostile vessel sighted " .. tostring(vehicle_object.state.timer), vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             end
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
@@ -406,14 +413,14 @@ function updateVehicles()
                     end
                 end
                 if nearest_victim_id ~= -1 then
-                    if not in_combat then
+                    if not in_combat and not too_damaged then
+                        --engage the victim vehicle
                         vehicle_object.path = {}
                         vehicle_object.target = nearest_victim_id
                         vehicle_object.state.s = "combat"
                     end
                 else
-                    vehicle_object.state.s = "waiting"
-                    server.setAIState(vehicle_object.survivors[1].id, 0)
+                    vehicle_object.state.s = "pathing"
                 end
                 --find gunner npc
                 for _, npc_object in pairs(vehicle_object.survivors) do
@@ -437,10 +444,7 @@ function updateVehicles()
                     end
                 end
             end
-            local hp = vehicle_object.hp
-            if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
-                hp = hp * g_savedata.hp_modifier
-            end
+
             if vehicle_object.current_damage > hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
