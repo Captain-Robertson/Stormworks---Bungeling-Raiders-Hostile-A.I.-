@@ -11,7 +11,7 @@ start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
-respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
+respawn_frequency = property.slider("Respawn frequency (minutes)", 0, 60,1,30),
 hp_modifier = property.slider("AI hp modifier", 0.3,3,0.1,1.0)
 }
 
@@ -32,7 +32,7 @@ function onCreate(is_world_create)
     end
     if is_world_create then
         server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
-        for i = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
+        for _ = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
 
             local location = getRandomLocation()
 
@@ -107,7 +107,7 @@ function build_locations(playlist_index, location_index)
         object_data.index = object_index
 
         -- investigate tags
-        for tag_index, tag_object in pairs(object_data.tags) do
+        for _, tag_object in pairs(object_data.tags) do
             if tag_object == "type=enemy_ai_boat" then
                 is_valid = true
             elseif tag_object == "unique" then
@@ -163,7 +163,7 @@ end
 function onPlayerSit(peer_id, vehicle_id, seat_name)
     local transform,success = server.getVehiclePos(vehicle_id)
     if success then
-        --successfull got position of the vehicle
+        --successful got position of the vehicle
         local x,y,z = matrix.position(transform)
         addVictim(vehicle_id,peer_id,x,y,z)
     end
@@ -175,7 +175,7 @@ function onVehicleLoad(vehicle_id)
     if vehicle_object ~= nil then
         vehicle_object.state.s = "pathing"
 
-        for npc_index, npc in pairs(vehicle_object.survivors) do
+        for _, npc in pairs(vehicle_object.survivors) do
             local c = server.getCharacterData(npc.id)
             if c then
                 server.setCharacterData(npc.id, c.hp, false, true)
@@ -187,13 +187,12 @@ function onVehicleLoad(vehicle_id)
     end
     --check if vehicle loaded is registered as a victim
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
-        local vehicle_data = server.getVehicleComponents(vehicle_id)
         g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
     else
         --if not a victim check it can be
         local transform,success = server.getVehiclePos(vehicle_id)
         if success then
-            --successfull got position of the vehicle
+            --successful got position of the vehicle
             local x,y,z = matrix.position(transform)
             addVictim(vehicle_id,-1,x,y,z)
         end
@@ -324,7 +323,7 @@ function updateVehicles()
                         if server.getVehicleLocal(vehicle_id) == false then
                             local vehicle_data = server.getVehicleData(vehicle_id)
                             local success, new_transform = server.moveGroupSafe(vehicle_data.group_id, new_pos)
-                            for npc_index, npc_object in pairs(vehicle_object.survivors) do
+                            for _, npc_object in pairs(vehicle_object.survivors) do
                                 server.setObjectPos(npc_object.id, new_transform)
                             end
                         end
@@ -356,7 +355,7 @@ function updateVehicles()
                 for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
                     local vehicle_pos, success = server.getVehiclePos(vehicle_id)
                     if victim_vehicle ~= nil and success then
-                        if inGreeyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                        if inGreedyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
                             local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
                             if distance < nearest_distance then
                                 nearest_victim_id = victim_vehicle_id
@@ -367,7 +366,7 @@ function updateVehicles()
                 end
                 if not g_savedata.show_markers then
                     if nearest_victim_id ~= -1 then
-                        victim_vehicles[nearest_victim_id].targetted = true
+                        victim_vehicles[nearest_victim_id].targeted = true
                     end
                 end
 
@@ -421,10 +420,10 @@ function trackVictims()
         if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60*5) then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
             if not g_savedata.show_markers then
-                if victim_vehicle.targetted then
+                if victim_vehicle.targeted then
                     server.removeMapID(-1, victim_vehicle.map_id)
                     server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Under Attack",500,"A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255,0,0, 255)
-                    victim_vehicle.targetted = false
+                    victim_vehicle.targeted = false
                 else
                     server.removeMapID(-1, victim_vehicle.map_id)
                 end
@@ -572,7 +571,7 @@ function spawnObject(spawn_transform, playlist_index, location_index, object, pa
 	if spawned_object_id ~= nil and spawned_object_id ~= 0 then
 
         local l_size = "small"
-		for tag_index, tag_object in pairs(object.tags) do
+		for _, tag_object in pairs(object.tags) do
 			if string.find(tag_object, "size=") ~= nil then
 				l_size = string.sub(tag_object, 6)
 			end
@@ -683,7 +682,7 @@ function iterObjects(playlist_index, location_index)
 end
 
 function hasTag(tags, tag)
-	for k, v in pairs(tags) do
+	for _, v in pairs(tags) do
 		if v == tag then
 			return true
 		end
@@ -851,7 +850,7 @@ function isTickID(id, rate)
 	return (tick_counter + id) % rate == 0
 end
 
-function inGreeyBoxRange(transform_a, transform_b, radius)
+function inGreedyBoxRange(transform_a, transform_b, radius)
     local x_a,y_a,z_a = matrix.position(transform_a)
     local x_b,y_b,z_b = matrix.position(transform_b)
     local dx = x_b - x_a
@@ -915,7 +914,7 @@ end
 
 function setReward(vehicle_id,vehicle_data)
     local threat_level = "none"
-    for tag_index, tag_object in pairs(vehicle_data.tags) do
+    for _, tag_object in pairs(vehicle_data.tags) do
         if tag_object:find("threat=") ~= nil then
             threat_level = tag_object:gsub("threat=","")
         end
@@ -931,7 +930,7 @@ end
 
 function setAIType(vehicle_id, vehicle_data)
     local _ai_type = "default"
-    for tag_index, tag_object in pairs(vehicle_data.tags) do
+    for _, tag_object in pairs(vehicle_data.tags) do
         if tag_object == "submarine" then
             _ai_type = "submarine"
         end
