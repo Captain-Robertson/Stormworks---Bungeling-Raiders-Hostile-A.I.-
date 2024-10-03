@@ -4,7 +4,7 @@ g_savedata =
 {
 show_markers = property.checkbox("Show hostile vessels on the map", true),
 allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
-allow_submarines = property.checkbox("Allow hostile submarine vessels", true),
+allow_submarines = property.checkbox("Allow hostile submarines", true),
 vehicles = {},
 respawn_timer = 0,
 start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
@@ -12,7 +12,7 @@ max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
 respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
-hp_modifier = property.slider("AI hp modifier", 0.3,3,0.1,1.0)
+hp_modifier = property.slider("AI HP modifier", 0.3,3,0.1,1.0)
 }
 
 local built_locations = {}
