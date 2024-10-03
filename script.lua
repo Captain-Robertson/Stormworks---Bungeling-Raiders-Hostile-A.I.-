@@ -243,7 +243,7 @@ end
 function updateVehicles()
     local vehicles = g_savedata.vehicles
     local victim_vehicles = g_savedata.victim_vehicles
-    local update_rate = 120
+    local update_rate = 60 * 2
     for vehicle_id, vehicle_object in pairs(vehicles) do
 
         if vehicle_object ~= nil and isTickID(vehicle_id, update_rate)then
@@ -253,7 +253,7 @@ function updateVehicles()
 
                 if #vehicle_object.path > 0 then
 
-                    if vehicle_object.state.timer >= 300 then
+                    if vehicle_object.state.timer >= 60 * 5 then
 
                         vehicle_object.state.timer = 0
 
@@ -279,7 +279,7 @@ function updateVehicles()
 
             elseif vehicle_object.state.s == "waiting" then
 
-                local wait_time = 3600
+                local wait_time = 60 * 60 * 1
 
                 if vehicle_object.state.timer >= wait_time then
                     vehicle_object.state.timer = 0
@@ -301,7 +301,7 @@ function updateVehicles()
 
             elseif vehicle_object.state.s == "pseudo" then
 
-                if vehicle_object.state.timer >= 900 then
+                if vehicle_object.state.timer >= 60 * 15 then
 
                     vehicle_object.state.timer = 0
 
