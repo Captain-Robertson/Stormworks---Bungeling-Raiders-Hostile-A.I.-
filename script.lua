@@ -11,7 +11,8 @@ start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
 max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
 victim_vehicles = {},
 max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
-respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30)
+respawn_frequency = property.slider("Respawn frequency (mins)", 0, 60,1,30),
+hp_modifier = property.slider("AI hp modifier", 0.3,3,0.1,1.0)
 }
 
 local built_locations = {}
@@ -47,6 +48,13 @@ function onCreate(is_world_create)
     else
         for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
             local vehicle_data,success = server.getVehicleData(vehicle_id)
+            if g_savedata.allow_missiles == nil then g_savedata.allow_missiles = true end
+            if g_savedata.allow_submarines == nil then g_savedata.allow_submarines = true end
+            if g_savedata.show_markers == nil then g_savedata.show_markers = true end
+            if g_savedata.max_vehicle_count == nil then g_savedata.max_vehicle_count = 25 end
+            if g_savedata.respawn_frequency == nil then g_savedata.respawn_frequency = 5 end
+            if g_savedata.max_vehicle_size == nil then g_savedata.max_vehicle_size = 3 end
+            if g_savedata.hp_modifier == nil then g_savedata.hp_modifier = 1 end
             if not success then
                 server.announce("hostile_ai","failed to get vehicle data when initiating")
                 vehicle_data = nil
@@ -150,6 +158,15 @@ function onVehicleUnload(vehicle_id)
     end
 
     removeVictim(vehicle_id)
+end
+
+function onPlayerSit(peer_id, vehicle_id, seat_name)
+    local transform,success = server.getVehiclePos(vehicle_id)
+    if success then
+        --successfull got position of the vehicle
+        local x,y,z = matrix.position(transform)
+        addVictim(vehicle_id,peer_id,x,y,z)
+    end
 end
 
 function onVehicleLoad(vehicle_id)
@@ -374,8 +391,11 @@ function updateVehicles()
                     end
                 end
             end
-
-            if vehicle_object.current_damage > vehicle_object.hp then
+            local hp = vehicle_object.hp
+            if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
+                hp = hp * g_savedata.hp_modifier
+            end
+            if vehicle_object.current_damage > hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
 
@@ -461,6 +481,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.max_vehicle_size = tonumber(new_value)
             elseif setting_name == "allow_submarines" then
                 g_savedata.allow_submarines = new_value == "true"
+            elseif setting_name == "hp_modifier" then
+                g_savedata.hp_modifier = tonumber(new_value)
             end
         else
             server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
@@ -471,6 +493,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
         server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
         server.announce("hostile_ai", "max_vehicle_size:"..tostring(g_savedata.max_vehicle_size))
+        server.announce("hostile_ai", "hp_modifier:"..tostring(g_savedata.hp_modifier))
     end
     if command == "?hostile_ai_clear" then
         for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
