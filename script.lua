@@ -406,7 +406,9 @@ function updateVehicles()
                 local crush_depth = -22
                 if vehicle_object.ai_type == "submarine" then
                     crush_depth = -100
-                end
+                elseif vehicle_object.ai_type == "heli" then
+					crush_depth = 0
+				end
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
