@@ -5,6 +5,7 @@ g_savedata =
     show_markers = property.checkbox("Show hostile vessels on the map", true),
     allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
     allow_submarines = property.checkbox("Allow hostile submarine vessels", true),
+    allow_helis = property.checkbox("Allow hostile helicopter aircraft", true),
     vehicles = {},
     respawn_timer = 0,
     start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
@@ -48,6 +49,7 @@ function onCreate(is_world_create)
             local vehicle_data,success = server.getVehicleData(vehicle_id)
             if g_savedata.allow_missiles == nil then g_savedata.allow_missiles = true end
             if g_savedata.allow_submarines == nil then g_savedata.allow_submarines = true end
+            if g_savedata.allow_helis == nil then g_savedata.allow_helis = true end
             if g_savedata.show_markers == nil then g_savedata.show_markers = true end
             if g_savedata.max_vehicle_count == nil then g_savedata.max_vehicle_count = 25 end
             if g_savedata.respawn_frequency == nil then g_savedata.respawn_frequency = 5 end
@@ -78,7 +80,8 @@ function onCreate(is_world_create)
                     setReward(vehicle_id, vehicle_data)
                 end
                 setAIType(vehicle_id, vehicle_data)
-                setSizeData(vehicle_id,vehicle_data)
+                setAltitude(vehicle_id)
+                setSizeData(vehicle_id)
             end
 
         end
@@ -108,6 +111,8 @@ function build_locations(playlist_index, location_index)
         for _, tag_object in pairs(object_data.tags) do
             if tag_object == "type=enemy_ai_boat" then
                 is_valid = true
+            elseif tag_object == "type=enemy_ai_heli" then
+                is_valid = true
             elseif tag_object == "unique" then
                 is_unique = true
             elseif string.find(tag_object, "x_min=") ~= nil then
@@ -122,7 +127,7 @@ function build_locations(playlist_index, location_index)
         end
 
         if object_data.type == "vehicle" then
-            if mission_objects.vehicle == nil and hasTag(object_data.tags, "type=enemy_ai_boat") then
+            if mission_objects.vehicle == nil and is_valid then
                 mission_objects.vehicle = object_data
             end
         elseif object_data.type == "character" then
@@ -172,7 +177,7 @@ function onVehicleLoad(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
         vehicle_object.state.s = "pathing"
-
+        setAltitude(vehicle_id)
         for _, npc in pairs(vehicle_object.survivors) do
             local c = server.getCharacterData(npc.id)
             if c then
@@ -254,18 +259,22 @@ function createPath(vehicle_id)
 
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local vehicle_pos = server.getVehiclePos(vehicle_id)
+    local path_list
+    if vehicle_object.ai_type == "heli" then
+        path_list = {{x = vehicle_object.destination.x, z = vehicle_object.destination.z, ui_id = server.getMapID()}}
+    else
+        local avoid_tags = "size=null"
+        if vehicle_object.size == "large" then
+            avoid_tags = "size=null,size=small,size=medium"
+        end
+        if vehicle_object.size == "medium" then
+            avoid_tags = "size=null,size=small"
+        end
 
-    local avoid_tags = "size=null"
-    if vehicle_object.size == "large" then
-        avoid_tags = "size=null,size=small,size=medium"
-    end
-    if vehicle_object.size == "medium" then
-        avoid_tags = "size=null,size=small"
-    end
-
-    local path_list = server.pathfind(vehicle_pos, (matrix.translation(vehicle_object.destination.x, 50, vehicle_object.destination.z)), "ocean_path", avoid_tags)
-    for _, path in pairs(path_list) do
-        path.ui_id = server.getMapID()
+        path_list = server.pathfind(vehicle_pos, (matrix.translation(vehicle_object.destination.x, 50, vehicle_object.destination.z)), "ocean_path", avoid_tags)
+        for _, path in pairs(path_list) do
+            path.ui_id = server.getMapID()
+        end
     end
 
     return path_list
@@ -287,13 +296,14 @@ function updateVehicles()
             local too_damaged = vehicle_object.current_damage > hp * 0.75
             if vehicle_object.state.s == "pathing" or in_combat then
 
+
                 if #vehicle_object.path > 0 then
 
                     if isTickID(vehicle_id, update_rate*2) or in_combat then
 
                         local vehicle_pos = server.getVehiclePos(vehicle_id)
                         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
-                        server.setAITarget(vehicle_object.survivors[1].id, (matrix.translation(vehicle_object.path[1].x, 0, vehicle_object.path[1].z)))
+                        server.setAITarget(vehicle_object.survivors[1].id, (matrix.translation(vehicle_object.path[1].x, getTargetAltitude(vehicle_id), vehicle_object.path[1].z)))
                         server.setAIState(vehicle_object.survivors[1].id, 1)
 
                         refuel(vehicle_id)
@@ -364,7 +374,7 @@ function updateVehicles()
                         movement_z = movement_z * speed / length_xz
 
                         local rotation_matrix = matrix.rotationToFaceXZ(movement_x, movement_z)
-                        local new_pos = matrix.multiply(matrix.translation(vehicle_x + movement_x, 0, vehicle_z + movement_z), rotation_matrix)
+                        local new_pos = matrix.multiply(matrix.translation(vehicle_x + movement_x, getTargetAltitude(vehicle_id), vehicle_z + movement_z), rotation_matrix)
 
                         if server.getVehicleLocal(vehicle_id) == false then
                             local vehicle_data = server.getVehicleData(vehicle_id)
@@ -389,7 +399,7 @@ function updateVehicles()
 
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
-                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, "Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, "["..vehicle_object.ai_type.." "..vehicle_object.state.s.."] Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             end
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
@@ -863,7 +873,7 @@ end
 
 function getRandomLocation()
     local tries = 0
-    while tries < 10 do
+    while tries < 40 do
         --getting a random location, built_location must be contiguous
         local random_location_index = math.random(1, #built_locations)
         local location = built_locations[random_location_index]
@@ -885,6 +895,10 @@ function getRandomLocation()
         end
 
         if hasTag(tags, "submarine") and not g_savedata.allow_submarines then
+            allowed = false
+        end
+
+        if hasTag(tags, "type=enemy_ai_heli") and not g_savedata.allow_helis then
             allowed = false
         end
 
@@ -956,9 +970,12 @@ function spawnVehicle(location, spawn_transform)
     if not success then
         server.announce("hostile_ai","failed to get vehicle data when spawning")
     else
+        --passing in vehicle_id for modifying or accessing vehicle_object in g_savedata.vehicles
+        --passing in vehicle_data mainly for the tags data
         setReward(vehicle_id, vehicle_data)
         setAIType(vehicle_id, vehicle_data)
-        setSizeData(vehicle_id, vehicle_data)
+        setAltitude(vehicle_id)
+        setSizeData(vehicle_id)
     end
     return vehicle_id
 end
@@ -979,17 +996,52 @@ function setReward(vehicle_id,vehicle_data)
     g_savedata.vehicles[vehicle_id].reward = threat_to_reward[threat_level]
 end
 
+function getTargetAltitude(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    local target_altitude = 0
+    if vehicle_object ~= nil then
+        if vehicle_object.ai_type == "submarine" then
+            target_altitude = -20
+        elseif vehicle_object.ai_type == "heli" then
+            target_altitude = 300
+        end
+    end
+    return target_altitude
+end
+
+function setAltitude(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object ~= nil then
+        local vehicle_transform, success = server.getVehiclePos(vehicle_id)
+        if success then
+            local x,altitude,z = matrix.position(vehicle_transform)
+            local target_altitude = getTargetAltitude(vehicle_id)
+            if math.abs(target_altitude - altitude) > 10 then
+                local move_success,new_transform = server.moveGroupSafe(vehicle_object.group_id, matrix.translation(x,target_altitude,z))
+                if not move_success then
+                    server.announce("hostile_ai","failed to set vehicle altitude")
+                end
+
+            end
+        end
+
+    end
+end
+
 function setAIType(vehicle_id, vehicle_data)
     local _ai_type = "default"
     for _, tag_object in pairs(vehicle_data.tags) do
         if tag_object == "submarine" then
             _ai_type = "submarine"
         end
+        if tag_object == "type=enemy_ai_heli" then
+            _ai_type = "heli"
+        end
     end
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
 end
 
-function setSizeData(vehicle_id, vehicle_data)
+function setSizeData(vehicle_id)
     --set vehicle data that depends on the size
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
