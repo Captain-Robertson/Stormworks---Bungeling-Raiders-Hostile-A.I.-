@@ -302,8 +302,6 @@ function updateVehicles()
                         if distance < 100 then
                             vehicle_object.state.timer = 0
                             table.remove(vehicle_object.path, 1)
-                        elseif vehicle_object.state.timer > 60 * 60 * 5 then
-                            server.despawnVehicle(vehicle_id, true)
                         end
                     end
                 else
