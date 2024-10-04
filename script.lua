@@ -80,7 +80,8 @@ function onCreate(is_world_create)
                     setReward(vehicle_id, vehicle_data)
                 end
                 setAIType(vehicle_id, vehicle_data)
-                setSizeData(vehicle_id,vehicle_data)
+                setAltitude(vehicle_id)
+                setSizeData(vehicle_id)
             end
 
         end
@@ -176,7 +177,7 @@ function onVehicleLoad(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
         vehicle_object.state.s = "pathing"
-
+        setAltitude(vehicle_id)
         for _, npc in pairs(vehicle_object.survivors) do
             local c = server.getCharacterData(npc.id)
             if c then
@@ -253,12 +254,12 @@ function updateVehicles()
 
         if vehicle_object ~= nil and isTickID(vehicle_id, update_rate) then
             vehicle_object.state.timer = vehicle_object.state.timer + update_rate
-
-            if vehicle_object.state.s == "pathing" then
             local hp = vehicle_object.hp
             if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
                 hp = hp * g_savedata.hp_modifier
             end
+            if vehicle_object.state.s == "pathing" then
+
 
                 if #vehicle_object.path > 0 then
 
@@ -351,7 +352,7 @@ function updateVehicles()
 
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
-                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, "Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, "["..vehicle_object.ai_type.."] Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             end
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
@@ -814,7 +815,7 @@ end
 
 function getRandomLocation()
     local tries = 0
-    while tries < 10 do
+    while tries < 40 do
         --getting a random location, built_location must be contiguous
         local random_location_index = math.random(1, #built_locations)
         local location = built_locations[random_location_index]
@@ -836,6 +837,10 @@ function getRandomLocation()
         end
 
         if hasTag(tags, "submarine") and not g_savedata.allow_submarines then
+            allowed = false
+        end
+
+        if hasTag(tags, "type=enemy_ai_heli") and not g_savedata.allow_helis then
             allowed = false
         end
 
@@ -911,8 +916,8 @@ function spawnVehicle(location, spawn_transform)
         --passing in vehicle_data mainly for the tags data
         setReward(vehicle_id, vehicle_data)
         setAIType(vehicle_id, vehicle_data)
-        setAltitude(vehicle_id, vehicle_data)
-        setSizeData(vehicle_id, vehicle_data)
+        setAltitude(vehicle_id)
+        setSizeData(vehicle_id)
     end
     return vehicle_id
 end
@@ -946,16 +951,19 @@ function getTargetAltitude(vehicle_id)
     return target_altitude
 end
 
-function setAltitude(vehicle_id, vehicle_data)
+function setAltitude(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
         local vehicle_transform, success = server.getVehiclePos(vehicle_id)
         if success then
             local x,altitude,z = matrix.position(vehicle_transform)
             local target_altitude = getTargetAltitude(vehicle_id)
-            local move_success,new_transform = server.moveGroupSafe(vehicle_object.group_id, matrix.translation(x,target_altitude,z))
-            if not move_success then
-                server.announce("hostile_ai","failed to set vehicle altitude")
+            if math.abs(target_altitude - altitude) > 10 then
+                local move_success,new_transform = server.moveGroupSafe(vehicle_object.group_id, matrix.translation(x,target_altitude,z))
+                if not move_success then
+                    server.announce("hostile_ai","failed to set vehicle altitude")
+                end
+
             end
         end
 
@@ -975,7 +983,7 @@ function setAIType(vehicle_id, vehicle_data)
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
 end
 
-function setSizeData(vehicle_id, vehicle_data)
+function setSizeData(vehicle_id)
     --set vehicle data that depends on the size
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object ~= nil then
