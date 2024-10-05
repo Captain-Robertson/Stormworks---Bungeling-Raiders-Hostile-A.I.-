@@ -216,9 +216,10 @@ function createCombatDestination(vehicle_id)
 
     local vehicle_transform, vehicle_success = server.getVehiclePos(vehicle_id)
     if not vehicle_success then
-        server.announce("hostile_ai", "failed to find target transform")
+        server.announce("hostile_ai", "failed to find self transform")
         return false
     end
+
     local target_x,_,target_z = matrix.position(target_transform)
     local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
     local orbit_direction = (vehicle_id % 2) * 2 - 1
@@ -303,7 +304,16 @@ function updateVehicles()
 
                         local vehicle_pos = server.getVehiclePos(vehicle_id)
                         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
-                        server.setAITarget(vehicle_object.survivors[1].id, (matrix.translation(vehicle_object.path[1].x, getTargetAltitude(vehicle_id), vehicle_object.path[1].z)))
+                        local target_altitude = getTargetAltitude(vehicle_id)
+                        if in_combat and vehicle_object.ai_type == "heli" then
+                            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
+                            if target_success then
+                                local _,victim_altitude,_ = matrix.position(victim_transform)
+                                target_altitude = victim_altitude + 100
+                            end
+
+                        end
+                        server.setAITarget(vehicle_object.survivors[1].id, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
                         server.setAIState(vehicle_object.survivors[1].id, 1)
 
                         refuel(vehicle_id)
@@ -365,12 +375,12 @@ function updateVehicles()
                         local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
 
                         local speed = 120
-			if vehicle_object.ai_type == "submarine" then
-			speed = 60
-			elseif vehicle_object.ai_type == "heli" then
-			speed = 320
-			end
-						
+                        if vehicle_object.ai_type == "submarine" then
+                            speed = 60
+                        elseif vehicle_object.ai_type == "heli" then
+                            speed = 320
+                        end
+
                         local movement_x = vehicle_object.path[1].x - vehicle_x
                         local movement_z = vehicle_object.path[1].z - vehicle_z
 
@@ -391,7 +401,7 @@ function updateVehicles()
                         end
 
                         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_transform)
-                        if distance < 50 then
+                        if distance < 100 then
                             table.remove(vehicle_object.path, 1)
                         end
                     else
@@ -471,8 +481,8 @@ function updateVehicles()
                 if vehicle_object.ai_type == "submarine" then
                     crush_depth = -100
                 elseif vehicle_object.ai_type == "heli" then
-					crush_depth = 0
-				end
+                    crush_depth = 0
+                end
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
@@ -530,8 +540,15 @@ end
 
 function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1, arg2, arg3, arg4)
     if command == "?hostile_ai_respawn" then
-        local result = respawnLosses(true)
-        server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
+        local times = 1
+        if arg1 ~= nil then
+            times = tonumber(arg1)
+        end
+        for i=1,times do
+            local result = respawnLosses(true)
+            server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
+
+        end
     end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
@@ -809,7 +826,7 @@ function respawnLosses(instant)
         local random_player_transform = server.getPlayerPos(random_player.id)
 
         --find random ocean tile near that player (10k-40k range)
-        local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 10000, 40000)
+        local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 5000, 10000)
         --put the vehicle randomly in the tile
         spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
