@@ -464,7 +464,9 @@ function updateVehicles()
                 local crush_depth = -22
                 if vehicle_object.ai_type == "submarine" then
                     crush_depth = -100
-                end
+                elseif vehicle_object.ai_type == "heli" then
+					crush_depth = 0
+				end
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
@@ -1017,9 +1019,10 @@ function setAltitude(vehicle_id)
             local x,altitude,z = matrix.position(vehicle_transform)
             local target_altitude = getTargetAltitude(vehicle_id)
             if math.abs(target_altitude - altitude) > 10 then
-                local move_success,new_transform = server.moveGroupSafe(vehicle_object.group_id, matrix.translation(x,target_altitude,z))
+                local vehicle_data = server.getVehicleData(vehicle_id)
+                local move_success,new_transform = server.moveGroupSafe(vehicle_data.group_id, matrix.translation(x,target_altitude,z))
                 if not move_success then
-                    server.announce("hostile_ai","failed to set vehicle altitude")
+                    server.announce("hostile_ai","failed to set altitude for "..tostring(vehicle_id).." from "..tostring(altitude).." to ".. tostring(target_altitude))
                 end
 
             end
