@@ -454,7 +454,7 @@ function updateVehicles()
                     end
                 end
             end
-            
+
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
                 server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
@@ -520,12 +520,6 @@ function updateVehicles()
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
-            end
-            if (#vehicle_object.path >= 1) then
-                server.removeMapLine(-1, vehicle_object.map_id)
-                server.addMapLine(-1, vehicle_object.map_id, vehicle_pos, matrix.translation(vehicle_object.path[1].x, 0, vehicle_object.path[1].z), 0.5, 0, 0, 255, 255)
-
-
             end
         end
     end
