@@ -18,6 +18,8 @@ local unique_locations = {}
 
 local tick_counter = 0
 
+local debug_mode = false
+
 local friendly_frequency = 999
 
 function onCreate(is_world_create)
@@ -367,6 +369,7 @@ function updateVehicles()
 
                     if distance < 100 then
                         vehicle_object.state.timer = 0
+                        server.removeMapLine(-1,vehicle_object.path[1].ui_id)
                         table.remove(vehicle_object.path, 1)
                     end
                 else
@@ -450,17 +453,40 @@ function updateVehicles()
                         end
                     else
                         vehicle_object.state.s = "waiting"
-                        server.setAIState(vehicle_object.survivors[1].id, 0)
+                        server.setAIState(vehicle_object.driver, 0)
                     end
                 end
             end
 
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
-                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                        "Hostile vessel sighted", vehicle_object.vision_radius,
-                        "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                if not debug_mode then
+                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
+                            "Hostile vessel sighted", vehicle_object.vision_radius,
+                            "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                else
+                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
+                            string.format("%d %s",vehicle_id, vehicle_object.ai_type), vehicle_object.vision_radius,
+                            string.format("state - %s\ntimer - %d", vehicle_object.state.s, vehicle_object.state.timer), vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                end
             end
+            if debug_mode then
+                if #vehicle_object.path >= 1 then
+                    local vehicle_pos = server.getVehiclePos(vehicle_id)
+                    local vehicle_x,_, vehicle_z = matrix.position(vehicle_pos)
+                    local first = vehicle_object.path[1]
+                    server.removeMapLine(-1,vehicle_object.map_id)
+                    server.addMapLine(-1,vehicle_object.map_id,matrix.translation(vehicle_x,0,vehicle_z),matrix.translation(first.x,0,first.z),0.3,255,0,0,255)
+                    for i = 1, #vehicle_object.path - 1 do
+                        local path = vehicle_object.path[i]
+                        local next = vehicle_object.path[i+1]
+                        server.removeMapLine(-1,path.ui_id)
+                        server.addMapLine(-1,path.ui_id,matrix.translation(path.x,0,path.z),matrix.translation(next.x,0,next.z),0.3,255,0,0,255)
+                    end
+
+                end
+            end
+
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
                 local nearest_victim_id = -1
@@ -490,7 +516,7 @@ function updateVehicles()
                         vehicle_object.state.s = "combat"
                     end
                 else
-                    vehicle_object.state.s = "pathing"
+                    vehicle_object.state.s = "waiting"
                     vehicle_object.target = nil
                 end
                 for _, gunner in pairs(vehicle_object.gunners) do
