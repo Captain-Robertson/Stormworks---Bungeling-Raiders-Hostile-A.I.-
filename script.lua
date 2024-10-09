@@ -1,7 +1,4 @@
-
-
-g_savedata =
-{
+g_savedata = {
     show_markers = property.checkbox("Show hostile vessels on the map", true),
     allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
     allow_submarines = property.checkbox("Allow hostile submarines", true),
@@ -12,8 +9,8 @@ g_savedata =
     max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
     victim_vehicles = {},
     max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
-    respawn_frequency = property.slider("Respawn frequency (minutes)", 0, 60,1,30),
-    hp_modifier = property.slider("AI HP modifier", 0.3,3,0.1,1.0)
+    respawn_frequency = property.slider("Respawn frequency (minutes)", 0, 60, 1, 30),
+    hp_modifier = property.slider("AI HP modifier", 0.3, 3, 0.1, 1.0)
 }
 
 local built_locations = {}
@@ -30,14 +27,14 @@ function onCreate(is_world_create)
         end
     end
     if is_world_create then
-        server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) .. " ships")
-        for _ = 1, math.min(g_savedata.start_vehicle_count,g_savedata.max_vehicle_count) do
+        server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) .. " ships")
+        for _ = 1, math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) do
 
             local location = getRandomLocation()
 
             local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
 
-            local spawn_transform, is_success =  server.getOceanTransform(random_transform, 1000, 10000)
+            local spawn_transform, is_success = server.getOceanTransform(random_transform, 1000, 10000)
             spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
             if is_success then
@@ -46,17 +43,33 @@ function onCreate(is_world_create)
         end
     else
         for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
-            local vehicle_data,success = server.getVehicleData(vehicle_id)
-            if g_savedata.allow_missiles == nil then g_savedata.allow_missiles = true end
-            if g_savedata.allow_submarines == nil then g_savedata.allow_submarines = true end
-            if g_savedata.allow_helis == nil then g_savedata.allow_helis = true end
-            if g_savedata.show_markers == nil then g_savedata.show_markers = true end
-            if g_savedata.max_vehicle_count == nil then g_savedata.max_vehicle_count = 25 end
-            if g_savedata.respawn_frequency == nil then g_savedata.respawn_frequency = 5 end
-            if g_savedata.max_vehicle_size == nil then g_savedata.max_vehicle_size = 3 end
-            if g_savedata.hp_modifier == nil then g_savedata.hp_modifier = 1 end
+            local vehicle_data, success = server.getVehicleData(vehicle_id)
+            if g_savedata.allow_missiles == nil then
+                g_savedata.allow_missiles = true
+            end
+            if g_savedata.allow_submarines == nil then
+                g_savedata.allow_submarines = true
+            end
+            if g_savedata.allow_helis == nil then
+                g_savedata.allow_helis = true
+            end
+            if g_savedata.show_markers == nil then
+                g_savedata.show_markers = true
+            end
+            if g_savedata.max_vehicle_count == nil then
+                g_savedata.max_vehicle_count = 25
+            end
+            if g_savedata.respawn_frequency == nil then
+                g_savedata.respawn_frequency = 5
+            end
+            if g_savedata.max_vehicle_size == nil then
+                g_savedata.max_vehicle_size = 3
+            end
+            if g_savedata.hp_modifier == nil then
+                g_savedata.hp_modifier = 1
+            end
             if not success then
-                server.announce("hostile_ai","failed to get vehicle data when initiating")
+                server.announce("hostile_ai", "failed to get vehicle data when initiating")
                 vehicle_data = nil
             end
             if vehicle_object.path == nil then
@@ -71,17 +84,22 @@ function onCreate(is_world_create)
                 vehicle_object.state.s = "pseudo"
             end
             if vehicle_object.bounds == nil then
-                vehicle_object.bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000}
+                vehicle_object.bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000 }
             end
-            if vehicle_object.current_damage == nil then vehicle_object.current_damage = 0 end
-            if vehicle_object.despawn_timer == nil then vehicle_object.despawn_timer = 0 end
+            if vehicle_object.current_damage == nil then
+                vehicle_object.current_damage = 0
+            end
+            if vehicle_object.despawn_timer == nil then
+                vehicle_object.despawn_timer = 0
+            end
             if vehicle_data ~= nil then
                 if vehicle_object.reward == nil then
                     setReward(vehicle_id, vehicle_data)
                 end
                 setAIType(vehicle_id, vehicle_data)
-                setAltitude(vehicle_id)
+                --setAltitude(vehicle_id)
                 setSizeData(vehicle_id)
+                setNPCRoles(vehicle_id)
             end
 
         end
@@ -91,8 +109,7 @@ end
 function build_locations(playlist_index, location_index)
     local location_data = server.getLocationData(playlist_index, location_index)
 
-    local mission_objects =
-    {
+    local mission_objects = {
         vehicle = nil,
         survivors = {},
         objects = {},
@@ -101,7 +118,7 @@ function build_locations(playlist_index, location_index)
 
     local is_valid = false
     local is_unique = false
-    local bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000}
+    local bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000 }
 
     for object_index, object_data in iterObjects(playlist_index, location_index) do
 
@@ -145,9 +162,9 @@ function build_locations(playlist_index, location_index)
             mission_objects.vehicle.bounds = bounds
 
             if is_unique then
-                table.insert(unique_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects } )
+                table.insert(unique_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects })
             else
-                table.insert(built_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects } )
+                table.insert(built_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects })
             end
         end
     end
@@ -164,11 +181,11 @@ function onVehicleUnload(vehicle_id)
 end
 
 function onPlayerSit(peer_id, vehicle_id, seat_name)
-    local transform,success = server.getVehiclePos(vehicle_id)
+    local transform, success = server.getVehiclePos(vehicle_id)
     if success then
         --successful got position of the vehicle
-        local x,y,z = matrix.position(transform)
-        addVictim(vehicle_id,peer_id,x,y,z)
+        local x, y, z = matrix.position(transform)
+        addVictim(vehicle_id, peer_id, x, y, z)
     end
 end
 
@@ -178,6 +195,7 @@ function onVehicleLoad(vehicle_id)
     if vehicle_object ~= nil then
         vehicle_object.state.s = "pathing"
         setAltitude(vehicle_id)
+        setNPCRoles(vehicle_id)
         for _, npc in pairs(vehicle_object.survivors) do
             local c = server.getCharacterData(npc.id)
             if c then
@@ -193,14 +211,62 @@ function onVehicleLoad(vehicle_id)
         g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
     else
         --if not a victim check it can be
-        local transform,success = server.getVehiclePos(vehicle_id)
+        local transform, success = server.getVehiclePos(vehicle_id)
         if success then
             --successful got position of the vehicle
-            local x,y,z = matrix.position(transform)
-            addVictim(vehicle_id,-1,x,y,z)
+            local x, y, z = matrix.position(transform)
+            addVictim(vehicle_id, -1, x, y, z)
         end
     end
 
+end
+
+function createCombatDestination(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object.target == nil then
+        return false
+    end
+    local target_transform, target_success = server.getVehiclePos(vehicle_object.target)
+    if not target_success then
+        server.announce("hostile_ai", "failed to find target transform")
+        return false
+    end
+
+    local vehicle_transform, vehicle_success = server.getVehiclePos(vehicle_id)
+    if not vehicle_success then
+        server.announce("hostile_ai", "failed to find self transform")
+        return false
+    end
+    local gun_run = false
+    if vehicle_object.ai_type == "heli" then
+        gun_run = math.random() < 0.5
+    end
+    if gun_run then
+        local target_x, target_y, target_z = matrix.position(target_transform)
+        vehicle_object.destination.x = target_x
+        vehicle_object.destination.y = target_y
+        vehicle_object.destination.z = target_z
+
+        return true
+    else
+        local target_x, _, target_z = matrix.position(target_transform)
+        local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
+        local orbit_direction = (vehicle_id % 2) * 2 - 1
+        local orbit_rotation = matrix.rotationY(math.rad(45) * orbit_direction)
+        local delta_x = vehicle_x - target_x
+        local delta_z = vehicle_z - target_z
+        local distance = math.sqrt(delta_x ^ 2 + delta_z ^ 2)
+        delta_x = delta_x / distance * vehicle_object.orbit_radius
+        delta_z = delta_z / distance * vehicle_object.orbit_radius
+        local orbit_offset = matrix.multiply(orbit_rotation, matrix.translation(delta_x, 0, delta_z))
+        local offset_x, _, offset_z = matrix.position(orbit_offset)
+
+        vehicle_object.destination.x = target_x + offset_x + math.random(-20, 20)
+        vehicle_object.destination.y = nil
+        vehicle_object.destination.z = target_z + offset_z + math.random(-20, 20)
+
+        return true
+    end
 end
 
 function createDestination(vehicle_id)
@@ -210,7 +276,9 @@ function createDestination(vehicle_id)
     local random_transform = matrix.translation(math.random(vehicle_object.bounds.x_min, vehicle_object.bounds.x_max), 0, math.random(vehicle_object.bounds.z_min, vehicle_object.bounds.z_max))
     local target_pos, is_success = server.getOceanTransform(random_transform, 1000, 10000)
 
-    if is_success == false then return false end
+    if is_success == false then
+        return false
+    end
 
     local destination_pos = matrix.multiply(target_pos, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
     local dest_x, _, dest_z = matrix.position(destination_pos)
@@ -225,9 +293,12 @@ function createPath(vehicle_id)
 
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local vehicle_pos = server.getVehiclePos(vehicle_id)
-    local path_list
+    local path_list = {}
     if vehicle_object.ai_type == "heli" then
-        path_list = {{x = vehicle_object.destination.x, z = vehicle_object.destination.z, ui_id = server.getMapID()}}
+        path_list[1] = { x = vehicle_object.destination.x,
+                         y = vehicle_object.destination.y,
+                         z = vehicle_object.destination.z,
+                         ui_id = server.getMapID() }
     else
         local avoid_tags = "size=null"
         if vehicle_object.size == "large" then
@@ -242,7 +313,6 @@ function createPath(vehicle_id)
             path.ui_id = server.getMapID()
         end
     end
-
     return path_list
 end
 
@@ -253,46 +323,77 @@ function updateVehicles()
     for vehicle_id, vehicle_object in pairs(vehicles) do
 
         if vehicle_object ~= nil and isTickID(vehicle_id, update_rate) then
+
             vehicle_object.state.timer = vehicle_object.state.timer + update_rate
+            local in_combat = vehicle_object.state.s == "combat"
             local hp = vehicle_object.hp
             if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
                 hp = hp * g_savedata.hp_modifier
             end
-            if vehicle_object.state.s == "pathing" then
+            local too_damaged = vehicle_object.current_damage > hp * 0.75
+            if vehicle_object.state.s == "pathing" or in_combat then
 
 
                 if #vehicle_object.path > 0 then
-
-                    if vehicle_object.state.timer >= 300 then
-
-                        vehicle_object.state.timer = 0
-
-                        k1 = true
-
-                        local vehicle_pos = server.getVehiclePos(vehicle_id)
-                        local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
-                        server.setAITarget(vehicle_object.survivors[1].id, (matrix.translation(vehicle_object.path[1].x, getTargetAltitude(vehicle_id), vehicle_object.path[1].z)))
-                        server.setAIState(vehicle_object.survivors[1].id, 1)
-
-                        refuel(vehicle_id)
-                        reload(vehicle_id)
-
-                        if distance < 100 then
-                            vehicle_object.state.timer = 0
-                            table.remove(vehicle_object.path, 1)
+                    local vehicle_pos = server.getVehiclePos(vehicle_id)
+                    local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
+                    local target_altitude = getTargetAltitude(vehicle_id)
+                    if vehicle_object.ai_type == "heli" then
+                        if in_combat then
+                            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
+                            if target_success then
+                                local _, victim_altitude, _ = matrix.position(victim_transform)
+                                target_altitude = victim_altitude + 100
+                            else
+                                vehicle_object.state.s = "pathing"
+                            end
                         end
+                        --if destination contains y then use precise AI state
+                        if vehicle_object.destination.y ~= nil then
+                            server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
+                            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+                            server.setAIState(vehicle_object.driver, 3)
+                        else
+                            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+                            server.setAIState(vehicle_object.driver, 1)
+                        end
+                    else
+                        server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+                        server.setAIState(vehicle_object.driver, 1)
                     end
 
+                    refuel(vehicle_id)
+                    reload(vehicle_id)
+
+                    if distance < 100 then
+                        vehicle_object.state.timer = 0
+                        table.remove(vehicle_object.path, 1)
+                    end
                 else
-                    vehicle_object.state.s = "waiting"
-                    server.setAIState(vehicle_object.survivors[1].id, 0)
+                    server.setAIState(vehicle_object.driver, 0)
+                    --keep engaging if is in combat and not too damaged
+                    if in_combat and vehicle_object.target ~= nil and not too_damaged then
+                        if createCombatDestination(vehicle_id) then
+                            vehicle_object.path = createPath(vehicle_id)
+                            if server.getVehicleSimulating(vehicle_id) then
+                                vehicle_object.state.s = "combat"
+                            else
+                                vehicle_object.state.s = "pseudo"
+                            end
+
+                            refuel(vehicle_id)
+                            reload(vehicle_id)
+                        end
+                    else
+                        vehicle_object.state.s = "waiting"
+                    end
                 end
 
             elseif vehicle_object.state.s == "waiting" then
 
-                local wait_time = 3600
-
-                if vehicle_object.state.timer >= wait_time then
+                local wait_time = 60 * 60 * 1
+                --either waited enough or fleeing because took too much damage
+                if vehicle_object.state.timer >= wait_time or too_damaged then
                     vehicle_object.state.timer = 0
                     if createDestination(vehicle_id) then
                         vehicle_object.path = createPath(vehicle_id)
@@ -318,12 +419,12 @@ function updateVehicles()
                         local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
 
                         local speed = 120
-			if vehicle_object.ai_type == "submarine" then
-			speed = 60
-			elseif vehicle_object.ai_type == "heli" then
-			speed = 320
-			end
-						
+                        if vehicle_object.ai_type == "submarine" then
+                            speed = 60
+                        elseif vehicle_object.ai_type == "heli" then
+                            speed = 320
+                        end
+
                         local movement_x = vehicle_object.path[1].x - vehicle_x
                         local movement_z = vehicle_object.path[1].z - vehicle_z
 
@@ -354,11 +455,11 @@ function updateVehicles()
                 end
             end
 
-
-
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
-                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0, "["..vehicle_object.ai_type.."] Hostile vessel sighted", vehicle_object.vision_radius, "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
+                        "Hostile vessel sighted", vehicle_object.vision_radius,
+                        "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             end
             if vehicle_object.state.s ~= "pseudo" then
                 --find nearest victim vehicle in range
@@ -381,24 +482,26 @@ function updateVehicles()
                         victim_vehicles[nearest_victim_id].targeted = true
                     end
                 end
-
-                --find gunner npc
-                for _, npc_object in pairs(vehicle_object.survivors) do
-                    local npc_data = server.getCharacterData(npc_object.id)
-                    if npc_data then
-                        --check npc name contains "Gunner"
-                        if npc_data.name:find("Gunner") then
-                            --check there is a victim in range
-                            if nearest_victim_id ~= -1 then
-                                --set ai to track and fire
-                                server.setAIState(npc_object.id, 1)
-                                server.setAITargetVehicle(npc_object.id, nearest_victim_id)
-                            else
-                                --set ai to idle
-                                server.setAIState(npc_object.id, 0)
-                                server.setAITargetVehicle(npc_object.id, -1)
-                            end
-                        end
+                if nearest_victim_id ~= -1 then
+                    if not in_combat and not too_damaged then
+                        --engage the victim vehicle
+                        vehicle_object.path = {}
+                        vehicle_object.target = nearest_victim_id
+                        vehicle_object.state.s = "combat"
+                    end
+                else
+                    vehicle_object.state.s = "pathing"
+                    vehicle_object.target = nil
+                end
+                for _, gunner in pairs(vehicle_object.gunners) do
+                    if nearest_victim_id ~= -1 then
+                        --set ai to track and fire
+                        server.setAIState(gunner, 1)
+                        server.setAITargetVehicle(gunner, nearest_victim_id)
+                    else
+                        --set ai to idle
+                        server.setAIState(gunner, 0)
+                        server.setAITargetVehicle(gunner, -1)
                     end
                 end
             end
@@ -406,15 +509,14 @@ function updateVehicles()
             if vehicle_object.current_damage > hp then
                 vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
             end
-
-            if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) then
-                local vehicle_pos = server.getVehiclePos(vehicle_id)
-                local crush_depth = -22
-                if vehicle_object.ai_type == "submarine" then
-                    crush_depth = -100
-                elseif vehicle_object.ai_type == "heli" then
-					crush_depth = 0
-				end
+            local vehicle_pos = server.getVehiclePos(vehicle_id)
+            local crush_depth = -22
+            if vehicle_object.ai_type == "submarine" then
+                crush_depth = -100
+            elseif vehicle_object.ai_type == "heli" then
+                crush_depth = 0
+            end
+            if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) or vehicle_pos[14] < crush_depth then
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
@@ -428,12 +530,12 @@ function trackVictims()
     --track position of victim vehicles
     for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
         --update every 5 seconds
-        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60*5) then
+        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60 * 5) then
             victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
             if not g_savedata.show_markers then
                 if victim_vehicle.targeted then
                     server.removeMapID(-1, victim_vehicle.map_id)
-                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Under Attack",500,"A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255,0,0, 255)
+                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
                     victim_vehicle.targeted = false
                 else
                     server.removeMapID(-1, victim_vehicle.map_id)
@@ -448,7 +550,7 @@ function changeFriendlyFrequency()
     local vehicles = g_savedata.vehicles
     --change every 6 seconds
     if isTickID(0, 60 * 6) then
-        friendly_frequency = math.random(100,999)
+        friendly_frequency = math.random(100, 999)
         for vehicle_id, _ in pairs(vehicles) do
             server.setVehicleKeypad(vehicle_id, "friendly frequency", friendly_frequency)
         end
@@ -472,8 +574,15 @@ end
 
 function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1, arg2, arg3, arg4)
     if command == "?hostile_ai_respawn" then
-        local result = respawnLosses(true)
-        server.announce("hostile ai", "result (successful:vehicle id/failed:-1):"..tostring(result))
+        local times = 1
+        if arg1 ~= nil then
+            times = tonumber(arg1)
+        end
+        for i = 1, times do
+            local result = respawnLosses(true)
+            server.announce("hostile ai", "result (successful:vehicle id/failed:-1):" .. tostring(result))
+
+        end
     end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
@@ -497,13 +606,13 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         else
             server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
         end
-        server.announce("hostile ai", "allow_missiles:"..tostring(g_savedata.allow_missiles))
-        server.announce("hostile ai", "allow_submarines:"..tostring(g_savedata.allow_submarines))
-        server.announce("hostile ai", "show_markers:"..tostring(g_savedata.show_markers))
-        server.announce("hostile_ai", "max_vehicle_count:"..tostring(g_savedata.max_vehicle_count))
-        server.announce("hostile_ai", "respawn_frequency:"..tostring(g_savedata.respawn_frequency))
-        server.announce("hostile_ai", "max_vehicle_size:"..tostring(g_savedata.max_vehicle_size))
-        server.announce("hostile_ai", "hp_modifier:"..tostring(g_savedata.hp_modifier))
+        server.announce("hostile ai", "allow_missiles:" .. tostring(g_savedata.allow_missiles))
+        server.announce("hostile ai", "allow_submarines:" .. tostring(g_savedata.allow_submarines))
+        server.announce("hostile ai", "show_markers:" .. tostring(g_savedata.show_markers))
+        server.announce("hostile_ai", "max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
+        server.announce("hostile_ai", "respawn_frequency:" .. tostring(g_savedata.respawn_frequency))
+        server.announce("hostile_ai", "max_vehicle_size:" .. tostring(g_savedata.max_vehicle_size))
+        server.announce("hostile_ai", "hp_modifier:" .. tostring(g_savedata.hp_modifier))
     end
     if command == "?hostile_ai_clear" then
         for vehicle_id, _ in pairs(g_savedata.vehicles) do
@@ -522,8 +631,8 @@ function refuel(vehicle_id)
 end
 
 function reload(vehicle_id)
-    for i=1, 15 do
-        server.setVehicleWeapon(vehicle_id, "Ammo "..i, 999)
+    for i = 1, 15 do
+        server.setVehicleWeapon(vehicle_id, "Ammo " .. i, 999)
     end
 end
 
@@ -533,7 +642,7 @@ function calculate_distance_to_next_waypoint(path_pos, vehicle_pos)
     local vector_x = path_pos.x - vehicle_x
     local vector_z = path_pos.z - vehicle_z
 
-    return math.sqrt( (vector_x * vector_x) + (vector_z * vector_z))
+    return math.sqrt((vector_x * vector_x) + (vector_z * vector_z))
 end
 
 function normalize_2d(x, z)
@@ -647,7 +756,9 @@ end
 function iterLocations(playlist_index)
     local playlist_data = server.getAddonData(playlist_index)
     local location_count = 0
-    if playlist_data ~= nil then location_count = playlist_data.location_count end
+    if playlist_data ~= nil then
+        location_count = playlist_data.location_count
+    end
     local location_index = 0
 
     return function()
@@ -672,7 +783,9 @@ end
 function iterObjects(playlist_index, location_index)
     local location_data = server.getLocationData(playlist_index, location_index)
     local object_count = 0
-    if location_data ~= nil then object_count = location_data.component_count end
+    if location_data ~= nil then
+        object_count = location_data.component_count
+    end
     local object_index = 0
 
     return function()
@@ -711,7 +824,7 @@ function killReward(vehicle_id)
 
     local reward_amount = g_savedata.vehicles[vehicle_id].reward
     if reward_amount > 0 then
-        server.notify(-1, "Enemy vessel destroyed", "Rewarded $ "..math.floor(reward_amount), 9)
+        server.notify(-1, "Enemy vessel destroyed", "Rewarded $ " .. math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
     end
 end
@@ -753,12 +866,12 @@ function respawnLosses(instant)
         local random_player_transform = server.getPlayerPos(random_player.id)
 
         --find random ocean tile near that player (10k-40k range)
-        local spawn_transform, is_success =  server.getOceanTransform(random_player_transform, 10000, 40000)
+        local spawn_transform, is_success = server.getOceanTransform(random_player_transform, 5000, 10000)
         --put the vehicle randomly in the tile
         spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
         if is_success then
-            return spawnVehicle(location,spawn_transform)
+            return spawnVehicle(location, spawn_transform)
         end
         return -1
     end
@@ -775,15 +888,19 @@ function cleanupVehicle(vehicle_id)
     server.spawnExplosion(vehicle_pos, vehicle_object.explosion_size)
 
     server.removeMapObject(-1, vehicle_object.map_id)
+    server.removeMapLine(-1, vehicle_object.map_id)
+    for _, waypoint in pairs(vehicle_object.path) do
+        server.removeMapLine(-1, waypoint.ui_id)
+    end
     for _, survivor in pairs(vehicle_object.survivors) do
         server.despawnObject(survivor.id, true)
     end
 end
 
-function addVictim(vehicle_id,peer_id, x,y,z)
+function addVictim(vehicle_id, peer_id, x, y, z)
     if peer_id ~= -1 then
         g_savedata.victim_vehicles[vehicle_id] = {
-            transform = matrix.translation(x,y,z),
+            transform = matrix.translation(x, y, z),
             map_id = server.getMapID(),
         }
         return
@@ -798,14 +915,14 @@ function addVictim(vehicle_id,peer_id, x,y,z)
         return
     end
     --filter only ai vehicles
-    if hasTag(vehicle_data.tags,"type=ai_boat") or hasTag(vehicle_data.tags,"type=ai_plane") or hasTag(vehicle_data.tags,"type=ai_heli") then
+    if hasTag(vehicle_data.tags, "type=ai_boat") or hasTag(vehicle_data.tags, "type=ai_plane") or hasTag(vehicle_data.tags, "type=ai_heli") then
         --ignore hostile boats or midair refuel planes
-        if (hasTag(vehicle_data.tags,"unique")) then
+        if (hasTag(vehicle_data.tags, "unique")) then
             return
         end
 
         g_savedata.victim_vehicles[vehicle_id] = {
-            transform = matrix.translation(x,y,z),
+            transform = matrix.translation(x, y, z),
             map_id = server.getMapID(),
         }
         return
@@ -820,7 +937,7 @@ function removeVictim(vehicle_id)
 end
 
 function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
-    addVictim(vehicle_id,peer_id,x,y,z)
+    addVictim(vehicle_id, peer_id, x, y, z)
 end
 
 function getRandomLocation()
@@ -834,15 +951,15 @@ function getRandomLocation()
         --using an boolean flag here to avoid messy nested if statements when more checks are added
         local allowed = true
         --check if it has missiles and missiles are allowed
-        if hasTag(tags,"missiles") and not g_savedata.allow_missiles then
+        if hasTag(tags, "missiles") and not g_savedata.allow_missiles then
             allowed = false
         end
 
-        if hasTag(tags,"size=medium") and g_savedata.max_vehicle_size < 2 then
+        if hasTag(tags, "size=medium") and g_savedata.max_vehicle_size < 2 then
             allowed = false
         end
 
-        if hasTag(tags,"size=large") and g_savedata.max_vehicle_size < 3 then
+        if hasTag(tags, "size=large") and g_savedata.max_vehicle_size < 3 then
             allowed = false
         end
 
@@ -859,7 +976,7 @@ function getRandomLocation()
         end
         tries = tries + 1
     end
-    server.announce("hostile_ai","failed to find a suitable vehicle to deploy")
+    server.announce("hostile_ai", "failed to find a suitable vehicle to deploy")
     return nil
 end
 
@@ -868,8 +985,8 @@ function isTickID(id, rate)
 end
 
 function inGreedyBoxRange(transform_a, transform_b, radius)
-    local x_a,y_a,z_a = matrix.position(transform_a)
-    local x_b,y_b,z_b = matrix.position(transform_b)
+    local x_a, y_a, z_a = matrix.position(transform_a)
+    local x_b, y_b, z_b = matrix.position(transform_b)
     local dx = x_b - x_a
     if dx < -radius or dx > radius then
         return false
@@ -886,9 +1003,9 @@ function inGreedyBoxRange(transform_a, transform_b, radius)
 end
 
 function manhattanDistance(transform_a, transform_b)
-    local x_a,y_a,z_a = matrix.position(transform_a)
-    local x_b,y_b,z_b = matrix.position(transform_b)
-    return math.abs(x_b-x_a) + math.abs(y_b-y_a) + math.abs(z_b-z_a)
+    local x_a, y_a, z_a = matrix.position(transform_a)
+    local x_b, y_b, z_b = matrix.position(transform_b)
+    return math.abs(x_b - x_a) + math.abs(y_b - y_a) + math.abs(z_b - z_a)
 end
 
 function spawnVehicle(location, spawn_transform)
@@ -896,7 +1013,7 @@ function spawnVehicle(location, spawn_transform)
     local all_mission_objects = {}
     local spawned_objects = {
         vehicle = spawnObject(spawn_transform, location.playlist_index, location.location_index, location.objects.vehicle, 0, nil, all_mission_objects),
-        survivors = spawnObjects(spawn_transform, location.playlist_index,location.location_index, location.objects.survivors, all_mission_objects),
+        survivors = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.survivors, all_mission_objects),
         objects = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.objects, all_mission_objects),
         zones = spawnObjects(spawn_transform, location.playlist_index, location.location_index, location.objects.zones, all_mission_objects)
     }
@@ -918,9 +1035,9 @@ function spawnVehicle(location, spawn_transform)
         despawn_timer = 0,
         ai_type = spawned_objects.vehicle.ai_type
     }
-    local vehicle_data,success = server.getVehicleData(vehicle_id)
+    local vehicle_data, success = server.getVehicleData(vehicle_id)
     if not success then
-        server.announce("hostile_ai","failed to get vehicle data when spawning")
+        server.announce("hostile_ai", "failed to get vehicle data when spawning")
     else
         --passing in vehicle_id for modifying or accessing vehicle_object in g_savedata.vehicles
         --passing in vehicle_data mainly for the tags data
@@ -928,15 +1045,16 @@ function spawnVehicle(location, spawn_transform)
         setAIType(vehicle_id, vehicle_data)
         setAltitude(vehicle_id)
         setSizeData(vehicle_id)
+        setNPCRoles(vehicle_id)
     end
     return vehicle_id
 end
 
-function setReward(vehicle_id,vehicle_data)
+function setReward(vehicle_id, vehicle_data)
     local threat_level = "none"
     for _, tag_object in pairs(vehicle_data.tags) do
         if tag_object:find("threat=") ~= nil then
-            threat_level = tag_object:gsub("threat=","")
+            threat_level = tag_object:gsub("threat=", "")
         end
     end
     local threat_to_reward = {
@@ -966,13 +1084,13 @@ function setAltitude(vehicle_id)
     if vehicle_object ~= nil then
         local vehicle_transform, success = server.getVehiclePos(vehicle_id)
         if success then
-            local x,altitude,z = matrix.position(vehicle_transform)
+            local x, altitude, z = matrix.position(vehicle_transform)
             local target_altitude = getTargetAltitude(vehicle_id)
             if math.abs(target_altitude - altitude) > 10 then
                 local vehicle_data = server.getVehicleData(vehicle_id)
-                local move_success,new_transform = server.moveGroupSafe(vehicle_data.group_id, matrix.translation(x,target_altitude,z))
+                local move_success, new_transform = server.moveGroupSafe(vehicle_data.group_id, matrix.translation(x, target_altitude, z))
                 if not move_success then
-                    server.announce("hostile_ai","failed to set altitude for "..tostring(vehicle_id).." from "..tostring(altitude).." to ".. tostring(target_altitude))
+                    server.announce("hostile_ai", "failed to set altitude for " .. tostring(vehicle_id) .. " from " .. tostring(altitude) .. " to " .. tostring(target_altitude))
                 end
 
             end
@@ -994,6 +1112,28 @@ function setAIType(vehicle_id, vehicle_data)
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
 end
 
+function setNPCRoles(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object ~= nil then
+        vehicle_object.gunners = {}
+        vehicle_object.driver = nil
+        for _, npc in pairs(vehicle_object.survivors) do
+            local c = server.getCharacterData(npc.id)
+            if c then
+                if c.name:find("Gunner") then
+                    table.insert(vehicle_object.gunners, npc.id)
+                elseif c.name:find("Captain") or c.name:find("Pilot") then
+                    vehicle_object.driver = npc.id
+                end
+            end
+        end
+        if vehicle_object.driver == nil then
+            server.announce("hostile_ai", "failed to find driver npc from " .. tostring(#vehicle_object.survivors))
+        end
+        g_savedata[vehicle_id] = vehicle_object
+    end
+end
+
 function setSizeData(vehicle_id)
     --set vehicle data that depends on the size
     local vehicle_object = g_savedata.vehicles[vehicle_id]
@@ -1003,21 +1143,21 @@ function setSizeData(vehicle_id)
             vehicle_object.vision_radius = 2000
             vehicle_object.orbit_radius = 500
             vehicle_object.explosion_size = 0.6
-            vehicle_object.icon_colour = {255,255,0}
+            vehicle_object.icon_colour = { 255, 255, 0 }
         elseif vehicle_object.size == "medium" then
             vehicle_object.hp = 10000
             vehicle_object.vision_radius = 2000
             vehicle_object.orbit_radius = 750
             vehicle_object.explosion_size = 1.0
-            vehicle_object.icon_colour = {255,125,0}
+            vehicle_object.icon_colour = { 255, 125, 0 }
         elseif vehicle_object.size == "large" then
             vehicle_object.hp = 100000
             vehicle_object.vision_radius = 2000
             vehicle_object.orbit_radius = 1000
             vehicle_object.explosion_size = 1.5
-            vehicle_object.icon_colour = {255,0,0}
+            vehicle_object.icon_colour = { 255, 0, 0 }
         else
-            server.announce("hostile_ai","unexpected vehicle size")
+            server.announce("hostile_ai", "unexpected vehicle size")
         end
         g_savedata[vehicle_id] = vehicle_object
     end
