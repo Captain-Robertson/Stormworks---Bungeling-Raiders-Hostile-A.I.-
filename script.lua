@@ -449,6 +449,7 @@ function updateVehicles()
 
                         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_transform)
                         if distance < 100 then
+                            server.removeMapLine(-1,vehicle_object.path[1].ui_id)
                             table.remove(vehicle_object.path, 1)
                         end
                     else
@@ -470,20 +471,26 @@ function updateVehicles()
                             string.format("state - %s\ntimer - %d", vehicle_object.state.s, vehicle_object.state.timer), vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
                 end
             end
+
             if debug_mode then
                 if #vehicle_object.path >= 1 then
                     local vehicle_pos = server.getVehiclePos(vehicle_id)
                     local vehicle_x,_, vehicle_z = matrix.position(vehicle_pos)
-                    local first = vehicle_object.path[1]
-                    server.removeMapLine(-1,vehicle_object.map_id)
-                    server.addMapLine(-1,vehicle_object.map_id,matrix.translation(vehicle_x,0,vehicle_z),matrix.translation(first.x,0,first.z),0.3,255,0,0,255)
-                    for i = 1, #vehicle_object.path - 1 do
+                    local previous = {x=vehicle_x,z=vehicle_z}
+                    for i = 1, #vehicle_object.path do
                         local path = vehicle_object.path[i]
-                        local next = vehicle_object.path[i+1]
                         server.removeMapLine(-1,path.ui_id)
-                        server.addMapLine(-1,path.ui_id,matrix.translation(path.x,0,path.z),matrix.translation(next.x,0,next.z),0.3,255,0,0,255)
+                        server.addMapLine(-1,path.ui_id,matrix.translation(previous.x,0,previous.z),matrix.translation(path.x,0,path.z),0.3,255,0,0,255)
+                        previous = path
                     end
-
+                end
+            else
+                server.removeMapLine(-1,vehicle_object.map_id)
+                if #vehicle_object.path >= 1 then
+                    for i = 1, #vehicle_object.path do
+                        local path = vehicle_object.path[i]
+                        server.removeMapLine(-1,path.ui_id)
+                    end
                 end
             end
 
@@ -609,6 +616,9 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
             server.announce("hostile ai", "result (successful:vehicle id/failed:-1):" .. tostring(result))
 
         end
+    end
+    if command == "?hostile_ai_debug" then
+        debug_mode = not debug_mode
     end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
