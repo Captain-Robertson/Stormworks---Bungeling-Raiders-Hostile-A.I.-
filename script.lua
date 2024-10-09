@@ -458,7 +458,7 @@ function updateVehicles()
             if g_savedata.show_markers then
                 server.removeMapObject(-1, vehicle_object.map_id)
                 server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                        "[" .. vehicle_object.ai_type .. " " .. vehicle_object.state.s .. " " .. tostring(vehicle_id) .. " " .. tostring(vehicle_object.destination.y) .. "] Hostile vessel sighted", vehicle_object.vision_radius,
+                        "Hostile vessel sighted", vehicle_object.vision_radius,
                         "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             end
             if vehicle_object.state.s ~= "pseudo" then
