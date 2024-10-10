@@ -240,7 +240,7 @@ function createCombatDestination(vehicle_id)
         return false
     end
     local gun_run = false
-    if vehicle_object.ai_type == "heli" then
+    if vehicle_object.ai_type == "helicopter" then
         gun_run = math.random() < 0.5
     end
     if gun_run then
@@ -296,7 +296,7 @@ function createPath(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local vehicle_pos = server.getVehiclePos(vehicle_id)
     local path_list = {}
-    if vehicle_object.ai_type == "heli" then
+    if vehicle_object.ai_type == "helicopter" then
         path_list[1] = { x = vehicle_object.destination.x,
                          y = vehicle_object.destination.y,
                          z = vehicle_object.destination.z,
@@ -340,7 +340,7 @@ function updateVehicles()
                     local vehicle_pos = server.getVehiclePos(vehicle_id)
                     local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
                     local target_altitude = getTargetAltitude(vehicle_id)
-                    if vehicle_object.ai_type == "heli" then
+                    if vehicle_object.ai_type == "helicopter" then
                         if in_combat then
                             local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
                             if target_success then
@@ -424,7 +424,7 @@ function updateVehicles()
                         local speed = 120
                         if vehicle_object.ai_type == "submarine" then
                             speed = 60
-                        elseif vehicle_object.ai_type == "heli" then
+                        elseif vehicle_object.ai_type == "helicopter" then
                             speed = 320
                         end
 
@@ -463,8 +463,8 @@ function updateVehicles()
                 server.removeMapObject(-1, vehicle_object.map_id)
                 if not debug_mode then
                     server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                            "Hostile vessel sighted", vehicle_object.vision_radius,
-                            "A " .. vehicle_object.size .. " sized vessel flying the flag of the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                            "Hostile " .. vehicle_object.ai_type .. " sighted", vehicle_object.vision_radius,
+                            "A " .. vehicle_object.size .. " sized " .. vehicle_object.ai_type .. " belonging to the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
                 else
                     server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
                             string.format("%d %s",vehicle_id, vehicle_object.ai_type), vehicle_object.vision_radius,
@@ -546,7 +546,7 @@ function updateVehicles()
             local crush_depth = -22
             if vehicle_object.ai_type == "submarine" then
                 crush_depth = -100
-            elseif vehicle_object.ai_type == "heli" then
+            elseif vehicle_object.ai_type == "helicopter" then
                 crush_depth = 0
             end
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) or vehicle_pos[14] < crush_depth then
@@ -1107,8 +1107,8 @@ function getTargetAltitude(vehicle_id)
     local target_altitude = 0
     if vehicle_object ~= nil then
         if vehicle_object.ai_type == "submarine" then
-            target_altitude = -20
-        elseif vehicle_object.ai_type == "heli" then
+            target_altitude = -10
+        elseif vehicle_object.ai_type == "helicopter" then
             target_altitude = 300
         end
     end
@@ -1136,13 +1136,13 @@ function setAltitude(vehicle_id)
 end
 
 function setAIType(vehicle_id, vehicle_data)
-    local _ai_type = "default"
+    local _ai_type = "vessel"
     for _, tag_object in pairs(vehicle_data.tags) do
         if tag_object == "submarine" then
             _ai_type = "submarine"
         end
         if tag_object == "type=enemy_ai_heli" then
-            _ai_type = "heli"
+            _ai_type = "helicopter"
         end
     end
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
