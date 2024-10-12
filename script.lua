@@ -29,7 +29,7 @@ function onCreate(is_world_create)
         end
     end
     if is_world_create then
-        server.announce("hostile_ai", "spawning " .. math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) .. " ships")
+        announce("spawning " .. math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) .. " ships")
         for _ = 1, math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) do
 
             local location = getRandomLocation()
@@ -55,7 +55,7 @@ function onCreate(is_world_create)
             g_savedata.max_vehicle_size = g_savedata.max_vehicle_size or 3
             g_savedata.hp_modifier = g_savedata.hp_modifier or 1
             if not success then
-                server.announce("hostile_ai", "failed to get vehicle data when initiating")
+                log("failed to get vehicle data when initiating")
                 vehicle_data = nil
             end
             if vehicle_object.path == nil then
@@ -214,13 +214,13 @@ function createCombatDestination(vehicle_id)
     end
     local target_transform, target_success = server.getVehiclePos(vehicle_object.target)
     if not target_success then
-        server.announce("hostile_ai", "failed to find target transform")
+        log("failed to find target transform")
         return false
     end
 
     local vehicle_transform, vehicle_success = server.getVehiclePos(vehicle_id)
     if not vehicle_success then
-        server.announce("hostile_ai", "failed to find self transform")
+        log("failed to find self transform")
         return false
     end
     local gun_run = false
@@ -597,7 +597,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         end
         for i = 1, times do
             local result = respawnLosses(true)
-            server.announce("hostile ai", "result (successful:vehicle id/failed:-1):" .. tostring(result))
+            log("result (successful:vehicle id/failed:-1):" .. tostring(result))
 
         end
     end
@@ -624,15 +624,15 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.hp_modifier = tonumber(new_value)
             end
         else
-            server.announce("hostile_ai", "?hostile_ai_settings setting_name new_value")
+            announce("?hostile_ai_settings setting_name new_value")
         end
-        server.announce("hostile ai", "allow_missiles:" .. tostring(g_savedata.allow_missiles))
-        server.announce("hostile ai", "allow_submarines:" .. tostring(g_savedata.allow_submarines))
-        server.announce("hostile ai", "show_markers:" .. tostring(g_savedata.show_markers))
-        server.announce("hostile_ai", "max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
-        server.announce("hostile_ai", "respawn_frequency:" .. tostring(g_savedata.respawn_frequency))
-        server.announce("hostile_ai", "max_vehicle_size:" .. tostring(g_savedata.max_vehicle_size))
-        server.announce("hostile_ai", "hp_modifier:" .. tostring(g_savedata.hp_modifier))
+        announce("allow_missiles:" .. tostring(g_savedata.allow_missiles))
+        announce("allow_submarines:" .. tostring(g_savedata.allow_submarines))
+        announce("show_markers:" .. tostring(g_savedata.show_markers))
+        announce("max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
+        announce("respawn_frequency:" .. tostring(g_savedata.respawn_frequency))
+        announce("max_vehicle_size:" .. tostring(g_savedata.max_vehicle_size))
+        announce("hp_modifier:" .. tostring(g_savedata.hp_modifier))
     end
     if command == "?hostile_ai_clear" then
         for vehicle_id, _ in pairs(g_savedata.vehicles) do
@@ -996,7 +996,7 @@ function getRandomLocation()
         end
         tries = tries + 1
     end
-    server.announce("hostile_ai", "failed to find a suitable vehicle to deploy")
+    log("failed to find a suitable vehicle to deploy")
     return nil
 end
 
@@ -1057,7 +1057,7 @@ function spawnVehicle(location, spawn_transform)
     }
     local vehicle_data, success = server.getVehicleData(vehicle_id)
     if not success then
-        server.announce("hostile_ai", "failed to get vehicle data when spawning")
+        announce("failed to get vehicle data when spawning")
     else
         --passing in vehicle_id for modifying or accessing vehicle_object in g_savedata.vehicles
         --passing in vehicle_data mainly for the tags data
@@ -1177,8 +1177,19 @@ function setSizeData(vehicle_id)
             vehicle_object.explosion_size = 1.5
             vehicle_object.icon_colour = { 255, 0, 0 }
         else
-            server.announce("hostile_ai", "unexpected vehicle size")
+            log("unexpected vehicle size")
         end
         g_savedata[vehicle_id] = vehicle_object
     end
+end
+
+function announce(message)
+    server.announce("hostile_ai", message)
+end
+
+function log(message)
+    if not debug_mode then
+        return
+    end
+    server.announce("hostile_ai", "DEBUG:" .. message)
 end
