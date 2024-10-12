@@ -22,6 +22,15 @@ local debug_mode = false
 
 local friendly_frequency = 999
 
+local TYPE_HELICOPTER = "helicopter"
+local TYPE_VESSEL = "vessel"
+local TYPE_SUBMARINE = "submarine"
+
+local STATE_COMBAT = "combat"
+local STATE_PATHING = "pathing"
+local STATE_WAITING = "waiting"
+local STATE_PSEUDO = "pseudo"
+
 function onCreate(is_world_create)
     for i in iterPlaylists() do
         for j in iterLocations(i) do
@@ -224,7 +233,7 @@ function createCombatDestination(vehicle_id)
         return false
     end
     local gun_run = false
-    if vehicle_object.ai_type == "helicopter" then
+    if vehicle_object.ai_type == TYPE_HELICOPTER then
         gun_run = math.random() < 0.5
     end
     if gun_run then
@@ -280,7 +289,7 @@ function createPath(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local vehicle_pos = server.getVehiclePos(vehicle_id)
     local path_list = {}
-    if vehicle_object.ai_type == "helicopter" then
+    if vehicle_object.ai_type == TYPE_HELICOPTER then
         path_list[1] = { x = vehicle_object.destination.x,
                          y = vehicle_object.destination.y,
                          z = vehicle_object.destination.z,
@@ -983,7 +992,7 @@ function getRandomLocation()
             allowed = false
         end
 
-        if hasTag(tags, "submarine") and not g_savedata.allow_submarines then
+        if hasTag(tags, TYPE_SUBMARINE) and not g_savedata.allow_submarines then
             allowed = false
         end
 
@@ -1090,9 +1099,9 @@ function getTargetAltitude(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local target_altitude = 0
     if vehicle_object ~= nil then
-        if vehicle_object.ai_type == "submarine" then
+        if vehicle_object.ai_type == TYPE_SUBMARINE then
             target_altitude = -10
-        elseif vehicle_object.ai_type == "helicopter" then
+        elseif vehicle_object.ai_type == TYPE_HELICOPTER then
             target_altitude = 300
         end
     end
@@ -1120,13 +1129,13 @@ function setAltitude(vehicle_id)
 end
 
 function setAIType(vehicle_id, vehicle_data)
-    local _ai_type = "vessel"
+    local _ai_type = TYPE_VESSEL
     for _, tag_object in pairs(vehicle_data.tags) do
-        if tag_object == "submarine" then
-            _ai_type = "submarine"
+        if tag_object == TYPE_SUBMARINE then
+            _ai_type = TYPE_SUBMARINE
         end
         if tag_object == "type=enemy_ai_heli" then
-            _ai_type = "helicopter"
+            _ai_type = TYPE_HELICOPTER
         end
     end
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
