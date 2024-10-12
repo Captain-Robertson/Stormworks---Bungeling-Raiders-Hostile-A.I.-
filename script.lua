@@ -19,6 +19,7 @@ local unique_locations = {}
 local tick_counter = 0
 
 local debug_mode = false
+local time_multiplier = 5
 
 local friendly_frequency = 999
 
@@ -176,12 +177,7 @@ function onVehicleUnload(vehicle_id)
 end
 
 function onPlayerSit(peer_id, vehicle_id, seat_name)
-    local transform, success = server.getVehiclePos(vehicle_id)
-    if success then
-        --successful got position of the vehicle
-        local x, y, z = matrix.position(transform)
-        addVictim(vehicle_id, peer_id, x, y, z)
-    end
+    addVictim(vehicle_id, peer_id)
 end
 
 function onVehicleLoad(vehicle_id)
@@ -212,6 +208,9 @@ function onVehicleLoad(vehicle_id)
             local x, y, z = matrix.position(transform)
             addVictim(vehicle_id, -1, x, y, z)
         end
+    else
+        --if not a victim try make it one
+        addVictim(vehicle_id, -1)
     end
 
 end
@@ -257,7 +256,7 @@ function createCombatDestination(vehicle_id)
         local offset_x, _, offset_z = matrix.position(orbit_offset)
 
         vehicle_object.destination.x = target_x + offset_x + math.random(-20, 20)
-        vehicle_object.destination.y = nil
+        vehicle_object.destination.y = getCruiseAltitude(vehicle_id)
         vehicle_object.destination.z = target_z + offset_z + math.random(-20, 20)
 
         return true
@@ -533,15 +532,10 @@ function updateVehicles()
             end
 
             if vehicle_object.current_damage > hp then
-                vehicle_object.despawn_timer = vehicle_object.despawn_timer + 1
+                vehicle_object.despawn_timer = vehicle_object.despawn_timer + update_rate
             end
             local vehicle_pos = server.getVehiclePos(vehicle_id)
-            local crush_depth = -22
-            if vehicle_object.ai_type == "submarine" then
-                crush_depth = -100
-            elseif vehicle_object.ai_type == "helicopter" then
-                crush_depth = 0
-            end
+            local crush_depth = getCrushAltitude(vehicle_id)
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) or vehicle_pos[14] < crush_depth then
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
@@ -651,12 +645,11 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
 end
 
 function refuel(vehicle_id)
-    server.setVehicleTank(vehicle_id, "diesel1", 999, 1)
-    server.setVehicleTank(vehicle_id, "diesel2", 999, 1)
-    server.setVehicleTank(vehicle_id, "jet1", 999, 2)
-    server.setVehicleTank(vehicle_id, "jet2", 999, 2)
-    server.setVehicleBattery(vehicle_id, "battery1", 1)
-    server.setVehicleBattery(vehicle_id, "battery2", 1)
+    for i = 1, 15 do
+        server.setVehicleTank(vehicle_id, "diesel" .. i, 999, 1)
+        server.setVehicleTank(vehicle_id, "jet" .. i, 999, 2)
+        server.setVehicleBattery(vehicle_id, "battery" .. i, 1)
+    end
 end
 
 function reload(vehicle_id)
@@ -895,7 +888,7 @@ function respawnLosses(instant)
         local random_player_transform = server.getPlayerPos(random_player.id)
 
         --find random ocean tile near that player (10k-40k range)
-        local spawn_transform, is_success = server.getOceanTransform(random_player_transform, 5000, 10000)
+        local spawn_transform, is_success = server.getOceanTransform(random_player_transform, 5000, 30000)
         --put the vehicle randomly in the tile
         spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
@@ -926,10 +919,14 @@ function cleanupVehicle(vehicle_id)
     end
 end
 
-function addVictim(vehicle_id, peer_id, x, y, z)
+function addVictim(vehicle_id, peer_id)
+    local vehicle_transform, pos_success = server.getVehiclePos(vehicle_id)
+    if not pos_success then
+        return
+    end
     if peer_id ~= -1 then
         g_savedata.victim_vehicles[vehicle_id] = {
-            transform = matrix.translation(x, y, z),
+            transform = vehicle_transform,
             map_id = server.getMapID(),
         }
         return
@@ -951,7 +948,7 @@ function addVictim(vehicle_id, peer_id, x, y, z)
         end
 
         g_savedata.victim_vehicles[vehicle_id] = {
-            transform = matrix.translation(x, y, z),
+            transform = vehicle_transform,
             map_id = server.getMapID(),
         }
         return
@@ -966,7 +963,7 @@ function removeVictim(vehicle_id)
 end
 
 function onVehicleSpawn(vehicle_id, peer_id, x, y, z, cost)
-    addVictim(vehicle_id, peer_id, x, y, z)
+    addVictim(vehicle_id, peer_id)
 end
 
 function getRandomLocation()
@@ -1095,7 +1092,7 @@ function setReward(vehicle_id, vehicle_data)
     g_savedata.vehicles[vehicle_id].reward = threat_to_reward[threat_level]
 end
 
-function getTargetAltitude(vehicle_id)
+function getCruiseAltitude(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local target_altitude = 0
     if vehicle_object ~= nil then
@@ -1159,7 +1156,6 @@ function setNPCRoles(vehicle_id)
         if vehicle_object.driver == nil then
             server.announce("hostile_ai", "failed to find driver npc from " .. tostring(#vehicle_object.survivors))
         end
-        g_savedata[vehicle_id] = vehicle_object
     end
 end
 
