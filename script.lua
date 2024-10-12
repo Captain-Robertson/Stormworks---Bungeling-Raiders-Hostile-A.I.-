@@ -167,11 +167,7 @@ function build_locations(playlist_index, location_index)
 end
 
 function onVehicleUnload(vehicle_id)
-
-    local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object ~= nil then
-        vehicle_object.state.s = "pseudo"
-    end
+    setVehicleToPseudo(vehicle_id)
 
     removeVictim(vehicle_id)
 end
@@ -182,31 +178,16 @@ end
 
 function onVehicleLoad(vehicle_id)
 
-    local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object ~= nil then
-        vehicle_object.state.s = "pathing"
-        setAltitude(vehicle_id)
-        setNPCRoles(vehicle_id)
-        for _, npc in pairs(vehicle_object.survivors) do
-            local c = server.getCharacterData(npc.id)
-            if c then
-                server.setCharacterData(npc.id, c.hp, false, true)
-                server.setCharacterSeated(npc.id, vehicle_id, c.name)
-            end
-        end
-        refuel(vehicle_id)
-        reload(vehicle_id)
-    end
+    setVehicleToPathing(vehicle_id)
+    setAltitude(vehicle_id)
+    setNPCRoles(vehicle_id)
+    setNPCSeats(vehicle_id)
+
     --check if vehicle loaded is registered as a victim
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
-        g_savedata.victim_vehicles[vehicle_id].transform = server.getVehiclePos(vehicle_id)
-    else
-        --if not a victim check it can be
-        local transform, success = server.getVehiclePos(vehicle_id)
+        local vehicle_pos,success = server.getVehiclePos(vehicle_id)
         if success then
-            --successful got position of the vehicle
-            local x, y, z = matrix.position(transform)
-            addVictim(vehicle_id, -1, x, y, z)
+            g_savedata.victim_vehicles[vehicle_id].transform = vehicle_pos
         end
     else
         --if not a victim try make it one
@@ -234,6 +215,7 @@ function createCombatDestination(vehicle_id)
     local gun_run = false
     if vehicle_object.ai_type == TYPE_HELICOPTER then
         gun_run = math.random() < 0.5
+        vehicle_object.state.gun_run = gun_run
     end
     if gun_run then
         local target_x, target_y, target_z = matrix.position(target_transform)
@@ -287,6 +269,12 @@ function createPath(vehicle_id)
 
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local vehicle_pos = server.getVehiclePos(vehicle_id)
+    if #vehicle_object.path >= 0 then
+        for i = 1, #vehicle_object.path do
+            local path = vehicle_object.path[i]
+            server.removeMapLine(-1, path.ui_id)
+        end
+    end
     local path_list = {}
     if vehicle_object.ai_type == TYPE_HELICOPTER then
         path_list[1] = { x = vehicle_object.destination.x,
@@ -310,225 +298,354 @@ function createPath(vehicle_id)
     return path_list
 end
 
+function updateVehicleInCombat(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    if vehicle_object.target == -1 then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    if #vehicle_object.path > 0 then
+        local vehicle_pos = server.getVehiclePos(vehicle_id)
+        local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
+        if vehicle_object.ai_type == TYPE_HELICOPTER then
+            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
+            if target_success then
+                local _, victim_altitude, _ = matrix.position(victim_transform)
+                local target_altitude = victim_altitude + 50
+                if vehicle_object.state.gun_run == true then
+                    server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
+                    server.setAIState(vehicle_object.driver, 3)
+                else
+                    server.setAITargetVehicle(vehicle_object.driver, -1)
+                    server.setAIState(vehicle_object.driver, 1)
+                end
+                server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+            else
+                setVehicleToWaiting(vehicle_id)
+            end
+        else
+            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z)))
+            server.setAIState(vehicle_object.driver, 1)
+        end
+
+        refuel(vehicle_id)
+        reload(vehicle_id)
+
+        if distance < 100 then
+            vehicle_object.state.timer = 0
+            server.removeMapLine(-1, vehicle_object.path[1].ui_id)
+            table.remove(vehicle_object.path, 1)
+        end
+    else
+        server.setAIState(vehicle_object.driver, 0)
+        --keep engaging if is in combat and not too damaged
+        local hp = vehicle_object.hp
+        if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
+            hp = hp * g_savedata.hp_modifier
+        end
+
+        if vehicle_object.current_damage < hp * 0.75 then
+            setVehicleToCombat(vehicle_id)
+        else
+            setVehicleToWaiting(vehicle_id)
+        end
+    end
+end
+
+function setVehicleToCombat(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    --check vehicle can engage
+    if not server.getVehicleSimulating(vehicle_id) then
+        log("can't engage combat while in pseudo")
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    if vehicle_object.target == -1 then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    local hp = vehicle_object.hp
+    if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
+        hp = hp * g_savedata.hp_modifier
+    end
+    if vehicle_object.current_damage > hp * 0.75 then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    if createCombatDestination(vehicle_id) then
+        vehicle_object.path = createPath(vehicle_id)
+        if #vehicle_object.path > 0 then
+            vehicle_object.state.s = STATE_COMBAT
+            vehicle_object.state.timer = 0
+
+            refuel(vehicle_id)
+            reload(vehicle_id)
+            return
+        else
+            log("failed to create path to combat destination")
+        end
+
+    else
+        log("failed to create combat destination")
+    end
+end
+
+function updateVehicleInPathing(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    if #vehicle_object.path <= 0 then
+        setVehicleToWaiting(vehicle_id)
+        return
+    end
+    if TargetNearestVictim(vehicle_id) then
+        setVehicleToCombat(vehicle_id)
+    end
+
+    local vehicle_pos = server.getVehiclePos(vehicle_id)
+    local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
+    local cruise_altitude = getCruiseAltitude(vehicle_id)
+
+    server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, cruise_altitude, vehicle_object.path[1].z)))
+    server.setAIState(vehicle_object.driver, 1)
+
+    refuel(vehicle_id)
+    reload(vehicle_id)
+
+    if distance < 100 then
+        vehicle_object.state.timer = 0
+        server.removeMapLine(-1, vehicle_object.path[1].ui_id)
+        table.remove(vehicle_object.path, 1)
+    end
+end
+
+function setVehicleToPathing(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    if #vehicle_object.path <= 0 then
+        if createDestination(vehicle_id) then
+            vehicle_object.path = createPath(vehicle_id)
+        end
+        if not server.getVehicleSimulating(vehicle_id) then
+            setVehicleToPseudo(vehicle_id)
+            return
+        end
+    end
+
+    vehicle_object.state.s = STATE_PATHING
+    vehicle_object.state.timer = 0
+    refuel(vehicle_id)
+    reload(vehicle_id)
+end
+
+function updateVehicleInPseudo(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    if vehicle_object.state.timer >= 60 * 15 then
+        vehicle_object.state.timer = 0
+        if #vehicle_object.path <= 0 then
+            setVehicleToWaiting(vehicle_id)
+            return
+        end
+
+        local vehicle_transform = server.getVehiclePos(vehicle_id)
+        local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
+
+        local speed = 120
+        if vehicle_object.ai_type == TYPE_SUBMARINE then
+            speed = 60
+        elseif vehicle_object.ai_type == TYPE_HELICOPTER then
+            speed = 320
+        end
+
+        local movement_x = vehicle_object.path[1].x - vehicle_x
+        local movement_z = vehicle_object.path[1].z - vehicle_z
+
+        local length_xz = math.sqrt((movement_x * movement_x) + (movement_z * movement_z))
+        if speed < length_xz then
+            movement_x = movement_x / length_xz * speed
+            movement_z = movement_z / length_xz * speed
+        end
+
+        local rotation_matrix = matrix.rotationToFaceXZ(movement_x, movement_z)
+        local new_pos = matrix.multiply(matrix.translation(vehicle_x + movement_x, getCruiseAltitude(vehicle_id), vehicle_z + movement_z), rotation_matrix)
+
+        if server.getVehicleLocal(vehicle_id) == false then
+            local vehicle_data = server.getVehicleData(vehicle_id)
+            local success, new_transform = server.moveGroupSafe(vehicle_data.group_id, new_pos)
+            for _, npc_object in pairs(vehicle_object.survivors) do
+                server.setObjectPos(npc_object.id, new_transform)
+            end
+        end
+
+        local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_transform)
+        if distance < 100 then
+            server.removeMapLine(-1, vehicle_object.path[1].ui_id)
+            table.remove(vehicle_object.path, 1)
+        end
+    end
+end
+
+function setVehicleToPseudo(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    vehicle_object.state.s = STATE_PSEUDO
+    vehicle_object.state.timer = 0
+end
+
+function updateVehicleInWaiting(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    local wait_time = 60 * 60 * 1
+    if vehicle_object.state.timer >= wait_time then
+        setVehicleToPathing(vehicle_id)
+    end
+    if TargetNearestVictim(vehicle_id) then
+        if server.getVehicleSimulating(vehicle_id) then
+            setVehicleToCombat(vehicle_id)
+        end
+    end
+end
+
+function setVehicleToWaiting(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    server.setAIState(vehicle_object.driver, 0)
+    vehicle_object.state.s = STATE_WAITING
+    vehicle_object.state.timer = 0
+end
+
+function updateVehicleMarkers(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+
+    if g_savedata.show_markers then
+        server.removeMapObject(-1, vehicle_object.map_id)
+        if not debug_mode then
+
+            local label = string.format("Hostile %s sighted", vehicle_object.ai_type)
+            local description = string.format("A %s sized %s belonging to the Bungeling Empire has been spotted at this location, moving at high speed. ",vehicle_object.size,vehicle_object.ai_type)
+
+            server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
+                    label, vehicle_object.vision_radius,
+                    description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+        else
+            local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
+            local description = string.format("state - %s\ntimer - %d", vehicle_object.state.s, vehicle_object.state.timer)
+
+            server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
+                    label, vehicle_object.vision_radius,
+                    description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+        end
+    end
+
+    if debug_mode then
+        if #vehicle_object.path >= 1 then
+            local vehicle_pos = server.getVehiclePos(vehicle_id)
+            local vehicle_x, _, vehicle_z = matrix.position(vehicle_pos)
+            local previous = { x = vehicle_x, z = vehicle_z }
+            for i = 1, #vehicle_object.path do
+                local path = vehicle_object.path[i]
+                server.removeMapLine(-1, path.ui_id)
+                server.addMapLine(-1, path.ui_id, matrix.translation(previous.x, 0, previous.z), matrix.translation(path.x, 0, path.z), 0.3, 255, 0, 0, 255)
+                previous = path
+            end
+        end
+    else
+        server.removeMapLine(-1, vehicle_object.map_id)
+        if #vehicle_object.path >= 1 then
+            for i = 1, #vehicle_object.path do
+                local path = vehicle_object.path[i]
+                server.removeMapLine(-1, path.ui_id)
+            end
+        end
+    end
+end
+
+function TargetNearestVictim(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    local victim_vehicles = g_savedata.victim_vehicles
+    if vehicle_object == nil then
+        log("nil vehicle of id "..vehicle_id.." tried to find target")
+        return false
+    end
+    --find nearest victim vehicle in range
+    local nearest_victim_id = -1
+    local nearest_distance = 3000
+    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
+        local vehicle_pos, success = server.getVehiclePos(vehicle_id)
+        if victim_vehicle ~= nil and success then
+            if inGreedyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
+                if distance < nearest_distance then
+                    nearest_victim_id = victim_vehicle_id
+                    nearest_distance = distance
+                end
+            end
+        end
+    end
+    if not g_savedata.show_markers then
+        if nearest_victim_id ~= -1 then
+            victim_vehicles[nearest_victim_id].targeted = true
+        end
+    end
+    vehicle_object.target = nearest_victim_id
+    return vehicle_object.target ~= -1
+end
+
+function updateVehicleGunners(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then
+        log("tried to update gunner of nil vehicle "..vehicle_id)
+        return
+    end
+    if type(vehicle_object.target) ~= "number" then
+        vehicle_object.target = -1
+    end
+    for _, gunner in pairs(vehicle_object.gunners) do
+        if vehicle_object.target ~= -1 then
+            --set ai gunner to track and fire
+            server.setAIState(gunner, 1)
+        else
+            --set ai to idle
+            server.setAIState(gunner, 0)
+        end
+        server.setAITargetVehicle(gunner, vehicle_object.target)
+    end
+end
+
 function updateVehicles()
     local vehicles = g_savedata.vehicles
-    local victim_vehicles = g_savedata.victim_vehicles
     local update_rate = 60 * 2
     for vehicle_id, vehicle_object in pairs(vehicles) do
 
         if vehicle_object ~= nil and isTickID(vehicle_id, update_rate) then
+            vehicle_object.state.timer = vehicle_object.state.timer + update_rate * time_multiplier
 
-            vehicle_object.state.timer = vehicle_object.state.timer + update_rate
-            local in_combat = vehicle_object.state.s == "combat"
+            if vehicle_object.state.s == STATE_PATHING then
+                updateVehicleInPathing(vehicle_id)
+            elseif vehicle_object.state.s == STATE_COMBAT then
+                updateVehicleInCombat(vehicle_id)
+            elseif vehicle_object.state.s == STATE_WAITING then
+                updateVehicleInWaiting(vehicle_id)
+            elseif vehicle_object.state.s == STATE_PSEUDO then
+                updateVehicleInPseudo(vehicle_id)
+            end
+
+            updateVehicleMarkers(vehicle_id)
+            updateVehicleGunners(vehicle_id)
+
             local hp = vehicle_object.hp
             if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
                 hp = hp * g_savedata.hp_modifier
-            end
-            local too_damaged = vehicle_object.current_damage > hp * 0.75
-            if vehicle_object.state.s == "pathing" or in_combat then
-
-
-                if #vehicle_object.path > 0 then
-                    local vehicle_pos = server.getVehiclePos(vehicle_id)
-                    local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
-                    local target_altitude = getTargetAltitude(vehicle_id)
-                    if vehicle_object.ai_type == "helicopter" then
-                        if in_combat then
-                            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
-                            if target_success then
-                                local _, victim_altitude, _ = matrix.position(victim_transform)
-                                target_altitude = victim_altitude + 100
-                            else
-                                vehicle_object.state.s = "pathing"
-                            end
-                        end
-                        --if destination contains y then use precise AI state
-                        if vehicle_object.destination.y ~= nil then
-                            server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
-                            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
-                            server.setAIState(vehicle_object.driver, 3)
-                        else
-                            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
-                            server.setAIState(vehicle_object.driver, 1)
-                        end
-                    else
-                        server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
-                        server.setAIState(vehicle_object.driver, 1)
-                    end
-
-                    refuel(vehicle_id)
-                    reload(vehicle_id)
-
-                    if distance < 100 then
-                        vehicle_object.state.timer = 0
-                        server.removeMapLine(-1,vehicle_object.path[1].ui_id)
-                        table.remove(vehicle_object.path, 1)
-                    end
-                else
-                    server.setAIState(vehicle_object.driver, 0)
-                    --keep engaging if is in combat and not too damaged
-                    if in_combat and vehicle_object.target ~= nil and not too_damaged then
-                        if createCombatDestination(vehicle_id) then
-                            vehicle_object.path = createPath(vehicle_id)
-                            if server.getVehicleSimulating(vehicle_id) then
-                                vehicle_object.state.s = "combat"
-                            else
-                                vehicle_object.state.s = "pseudo"
-                            end
-
-                            refuel(vehicle_id)
-                            reload(vehicle_id)
-                        end
-                    else
-                        vehicle_object.state.s = "waiting"
-                    end
-                end
-
-            elseif vehicle_object.state.s == "waiting" then
-
-                local wait_time = 60 * 60 * 1
-                --either waited enough or fleeing because took too much damage
-                if vehicle_object.state.timer >= wait_time or too_damaged then
-                    vehicle_object.state.timer = 0
-                    if createDestination(vehicle_id) then
-                        vehicle_object.path = createPath(vehicle_id)
-                        if server.getVehicleSimulating(vehicle_id) then
-                            vehicle_object.state.s = "pathing"
-                        else
-                            vehicle_object.state.s = "pseudo"
-                        end
-
-                        refuel(vehicle_id)
-                        reload(vehicle_id)
-                    end
-                end
-
-            elseif vehicle_object.state.s == "pseudo" then
-
-                if vehicle_object.state.timer >= 60 * 15 then
-
-                    vehicle_object.state.timer = 0
-
-                    if #vehicle_object.path > 0 then
-                        local vehicle_transform = server.getVehiclePos(vehicle_id)
-                        local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
-
-                        local speed = 120
-                        if vehicle_object.ai_type == "submarine" then
-                            speed = 60
-                        elseif vehicle_object.ai_type == "helicopter" then
-                            speed = 320
-                        end
-
-                        local movement_x = vehicle_object.path[1].x - vehicle_x
-                        local movement_z = vehicle_object.path[1].z - vehicle_z
-
-                        local length_xz = math.sqrt((movement_x * movement_x) + (movement_z * movement_z))
-
-                        movement_x = movement_x * speed / length_xz
-                        movement_z = movement_z * speed / length_xz
-
-                        local rotation_matrix = matrix.rotationToFaceXZ(movement_x, movement_z)
-                        local new_pos = matrix.multiply(matrix.translation(vehicle_x + movement_x, getTargetAltitude(vehicle_id), vehicle_z + movement_z), rotation_matrix)
-
-                        if server.getVehicleLocal(vehicle_id) == false then
-                            local vehicle_data = server.getVehicleData(vehicle_id)
-                            local success, new_transform = server.moveGroupSafe(vehicle_data.group_id, new_pos)
-                            for _, npc_object in pairs(vehicle_object.survivors) do
-                                server.setObjectPos(npc_object.id, new_transform)
-                            end
-                        end
-
-                        local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_transform)
-                        if distance < 100 then
-                            server.removeMapLine(-1,vehicle_object.path[1].ui_id)
-                            table.remove(vehicle_object.path, 1)
-                        end
-                    else
-                        vehicle_object.state.s = "waiting"
-                        server.setAIState(vehicle_object.driver, 0)
-                    end
-                end
-            end
-
-            if g_savedata.show_markers then
-                server.removeMapObject(-1, vehicle_object.map_id)
-                if not debug_mode then
-                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                            "Hostile " .. vehicle_object.ai_type .. " sighted", vehicle_object.vision_radius,
-                            "A " .. vehicle_object.size .. " sized " .. vehicle_object.ai_type .. " belonging to the Bungeling Empire has been spotted at this location, moving at high speed. ", vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
-                else
-                    server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                            string.format("%d %s",vehicle_id, vehicle_object.ai_type), vehicle_object.vision_radius,
-                            string.format("state - %s\ntimer - %d", vehicle_object.state.s, vehicle_object.state.timer), vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
-                end
-            end
-
-            if debug_mode then
-                if #vehicle_object.path >= 1 then
-                    local vehicle_pos = server.getVehiclePos(vehicle_id)
-                    local vehicle_x,_, vehicle_z = matrix.position(vehicle_pos)
-                    local previous = {x=vehicle_x,z=vehicle_z}
-                    for i = 1, #vehicle_object.path do
-                        local path = vehicle_object.path[i]
-                        server.removeMapLine(-1,path.ui_id)
-                        server.addMapLine(-1,path.ui_id,matrix.translation(previous.x,0,previous.z),matrix.translation(path.x,0,path.z),0.3,255,0,0,255)
-                        previous = path
-                    end
-                end
-            else
-                server.removeMapLine(-1,vehicle_object.map_id)
-                if #vehicle_object.path >= 1 then
-                    for i = 1, #vehicle_object.path do
-                        local path = vehicle_object.path[i]
-                        server.removeMapLine(-1,path.ui_id)
-                    end
-                end
-            end
-
-            if vehicle_object.state.s ~= "pseudo" then
-                --find nearest victim vehicle in range
-                local nearest_victim_id = -1
-                local nearest_distance = 3000
-                for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
-                    local vehicle_pos, success = server.getVehiclePos(vehicle_id)
-                    if victim_vehicle ~= nil and success then
-                        if inGreedyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
-                            local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
-                            if distance < nearest_distance then
-                                nearest_victim_id = victim_vehicle_id
-                                nearest_distance = distance
-                            end
-                        end
-                    end
-                end
-                if not g_savedata.show_markers then
-                    if nearest_victim_id ~= -1 then
-                        victim_vehicles[nearest_victim_id].targeted = true
-                    end
-                end
-                if nearest_victim_id ~= -1 then
-                    if not in_combat and not too_damaged then
-                        --engage the victim vehicle
-                        vehicle_object.path = {}
-                        vehicle_object.target = nearest_victim_id
-                        vehicle_object.state.s = "combat"
-                    end
-                else
-                    vehicle_object.state.s = "waiting"
-                    vehicle_object.target = nil
-                end
-                for _, gunner in pairs(vehicle_object.gunners) do
-                    if nearest_victim_id ~= -1 then
-                        --set ai to track and fire
-                        server.setAIState(gunner, 1)
-                        server.setAITargetVehicle(gunner, nearest_victim_id)
-                    else
-                        --set ai to idle
-                        server.setAIState(gunner, 0)
-                        server.setAITargetVehicle(gunner, -1)
-                    end
-                end
             end
 
             if vehicle_object.current_damage > hp then
@@ -1105,23 +1222,33 @@ function getCruiseAltitude(vehicle_id)
     return target_altitude
 end
 
+function getCrushAltitude(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    local crush_depth = -22
+    if vehicle_object.ai_type == TYPE_SUBMARINE then
+        crush_depth = -100
+    elseif vehicle_object.ai_type == TYPE_HELICOPTER then
+        crush_depth = 0
+    end
+    return crush_depth
+end
+
 function setAltitude(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object ~= nil then
-        local vehicle_transform, success = server.getVehiclePos(vehicle_id)
-        if success then
-            local x, altitude, z = matrix.position(vehicle_transform)
-            local target_altitude = getTargetAltitude(vehicle_id)
-            if math.abs(target_altitude - altitude) > 10 then
-                local vehicle_data = server.getVehicleData(vehicle_id)
-                local move_success, new_transform = server.moveGroupSafe(vehicle_data.group_id, matrix.translation(x, target_altitude, z))
-                if not move_success then
-                    server.announce("hostile_ai", "failed to set altitude for " .. tostring(vehicle_id) .. " from " .. tostring(altitude) .. " to " .. tostring(target_altitude))
-                end
+    if not vehicle_object then return end
 
+    local vehicle_transform, success = server.getVehiclePos(vehicle_id)
+    if success then
+        local x, altitude, z = matrix.position(vehicle_transform)
+        local target_altitude = getCruiseAltitude(vehicle_id)
+        if math.abs(target_altitude - altitude) > 10 then
+            local vehicle_data = server.getVehicleData(vehicle_id)
+            local move_success, new_transform = server.moveGroupSafe(vehicle_data.group_id, matrix.translation(x, target_altitude, z))
+            if not move_success then
+                announce("failed to set altitude for " .. tostring(vehicle_id) .. " from " .. tostring(altitude) .. " to " .. tostring(target_altitude))
             end
-        end
 
+        end
     end
 end
 
@@ -1140,21 +1267,34 @@ end
 
 function setNPCRoles(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object ~= nil then
-        vehicle_object.gunners = {}
-        vehicle_object.driver = nil
-        for _, npc in pairs(vehicle_object.survivors) do
-            local c = server.getCharacterData(npc.id)
-            if c then
-                if c.name:find("Gunner") then
-                    table.insert(vehicle_object.gunners, npc.id)
-                elseif c.name:find("Captain") or c.name:find("Pilot") then
-                    vehicle_object.driver = npc.id
-                end
+    if not vehicle_object then return end
+
+    vehicle_object.gunners = {}
+    vehicle_object.driver = nil
+    for _, npc in pairs(vehicle_object.survivors) do
+        local c = server.getCharacterData(npc.id)
+        if c then
+            if c.name:find("Gunner") then
+                table.insert(vehicle_object.gunners, npc.id)
+            elseif c.name:find("Captain") or c.name:find("Pilot") then
+                vehicle_object.driver = npc.id
             end
         end
-        if vehicle_object.driver == nil then
-            server.announce("hostile_ai", "failed to find driver npc from " .. tostring(#vehicle_object.survivors))
+    end
+    if vehicle_object.driver == nil then
+        log("failed to find driver npc from " .. tostring(#vehicle_object.survivors))
+    end
+end
+
+function setNPCSeats(vehicle_id)
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if not vehicle_object then return end
+
+    for _, npc in pairs(vehicle_object.survivors) do
+        local c = server.getCharacterData(npc.id)
+        if c then
+            server.setCharacterData(npc.id, c.hp, false, true)
+            server.setCharacterSeated(npc.id, vehicle_id, c.name)
         end
     end
 end
