@@ -46,30 +46,14 @@ function onCreate(is_world_create)
     else
         for vehicle_id, vehicle_object in pairs(g_savedata.vehicles) do
             local vehicle_data, success = server.getVehicleData(vehicle_id)
-            if g_savedata.allow_missiles == nil then
-                g_savedata.allow_missiles = true
-            end
-            if g_savedata.allow_submarines == nil then
-                g_savedata.allow_submarines = true
-            end
-            if g_savedata.allow_helis == nil then
-                g_savedata.allow_helis = true
-            end
-            if g_savedata.show_markers == nil then
-                g_savedata.show_markers = true
-            end
-            if g_savedata.max_vehicle_count == nil then
-                g_savedata.max_vehicle_count = 25
-            end
-            if g_savedata.respawn_frequency == nil then
-                g_savedata.respawn_frequency = 5
-            end
-            if g_savedata.max_vehicle_size == nil then
-                g_savedata.max_vehicle_size = 3
-            end
-            if g_savedata.hp_modifier == nil then
-                g_savedata.hp_modifier = 1
-            end
+            g_savedata.allow_missiles = g_savedata.allow_missiles or true
+            g_savedata.allow_submarines = g_savedata.allow_submarines or true
+            g_savedata.allow_helis = g_savedata.allow_helis or true
+            g_savedata.show_markers = g_savedata.show_markers or true
+            g_savedata.max_vehicle_count = g_savedata.max_vehicle_count or 25
+            g_savedata.respawn_frequency = g_savedata.respawn_frequency or 5
+            g_savedata.max_vehicle_size = g_savedata.max_vehicle_size or 3
+            g_savedata.hp_modifier = g_savedata.hp_modifier or 1
             if not success then
                 server.announce("hostile_ai", "failed to get vehicle data when initiating")
                 vehicle_data = nil
