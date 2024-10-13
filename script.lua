@@ -19,7 +19,7 @@ local unique_locations = {}
 local tick_counter = 0
 
 local debug_mode = false
-local time_multiplier = 5
+local time_multiplier = 1
 
 local friendly_frequency = 999
 
@@ -963,7 +963,7 @@ function killReward(vehicle_id)
 
     local reward_amount = g_savedata.vehicles[vehicle_id].reward
     if reward_amount > 0 then
-        server.notify(-1, "Enemy vessel destroyed", "Rewarded $ " .. math.floor(reward_amount), 9)
+        server.notify(-1, "Enemy destroyed", "Rewarded $ " .. math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
     end
 end
