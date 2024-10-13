@@ -1046,6 +1046,9 @@ function addVictim(vehicle_id, peer_id)
     if not pos_success then
         return
     end
+    if g_savedata.vehicles[vehicle_id] ~= nil then
+        return
+    end
     if peer_id ~= -1 then
         g_savedata.victim_vehicles[vehicle_id] = {
             transform = vehicle_transform,
