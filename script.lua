@@ -315,8 +315,9 @@ function updateVehicleInCombat(vehicle_id)
     end
     local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
     if not target_success then
-        setVehicleToWaiting(vehicle_id)
+        setVehicleToPathing(vehicle_id)
     end
+
     if #vehicle_object.path > 0 then
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
@@ -353,7 +354,9 @@ function updateVehicleInCombat(vehicle_id)
         end
 
         if vehicle_object.current_damage < hp * 0.75 then
-            setVehicleToCombat(vehicle_id)
+            if targetNearestVictim(vehicle_id) then
+                setVehicleToCombat(vehicle_id)
+            end
         else
             setVehicleToWaiting(vehicle_id)
         end
