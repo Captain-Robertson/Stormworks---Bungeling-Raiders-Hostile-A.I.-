@@ -962,13 +962,14 @@ function hasTag(tags, tag)
 end
 
 function killReward(vehicle_id)
-    if g_savedata.vehicles[vehicle_id] == nil then
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object == nil then
         return
     end
 
-    local reward_amount = g_savedata.vehicles[vehicle_id].reward
+    local reward_amount = vehicle_object.reward
     if reward_amount > 0 then
-        server.notify(-1, "Enemy destroyed", "Rewarded $ " .. math.floor(reward_amount), 9)
+        server.notify(-1, string.format("Enemy %s destroyed", vehicle_object.ai_type), "Rewarded $ " .. math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
     end
 end
