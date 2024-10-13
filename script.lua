@@ -205,6 +205,10 @@ function createCombatDestination(vehicle_id)
     if vehicle_object.target == nil then
         return false
     end
+    if not g_savedata.victim_vehicles[vehicle_object.target] then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
     local target_transform, target_success = server.getVehiclePos(vehicle_object.target)
     if not target_success then
         log("failed to find target transform")
