@@ -384,6 +384,7 @@ function setVehicleToCombat(vehicle_id)
 
             refuel(vehicle_id)
             reload(vehicle_id)
+            setNPCSeats(vehicle_id)
             return
         else
             log("failed to create path to combat destination")
@@ -577,6 +578,9 @@ function TargetNearestVictim(vehicle_id)
         log("nil vehicle of id "..vehicle_id.." tried to find target")
         return false
     end
+    if not server.getVehicleSimulating(vehicle_id) then
+        return false
+    end
     --find nearest victim vehicle in range
     local nearest_victim_id = -1
     local nearest_distance = 3000
@@ -607,6 +611,7 @@ function updateVehicleGunners(vehicle_id)
         log("tried to update gunner of nil vehicle "..vehicle_id)
         return
     end
+
     if type(vehicle_object.target) ~= "number" then
         vehicle_object.target = -1
     end
