@@ -1,8 +1,4 @@
-
-This is the script file used in the Bungeling Raiders addon for Stormworks that I've posted on the Steam Workshop, the script itself began as just a modified version of the default AI script with a handful of ships that shot back at the player but it was enough of a stepping-stone for an unskilled hobbyist like myself to get this project off the ground.
-
 This is the script file used in the Bungeling Raiders addon for Stormworks that I've posted on the Steam Workshop, the script itself began as just a modified version of the default AI script with a handful of ships that shot back at the player but it was enough of a stepping-stone for an unskilled hobbyist like myself to get this project off the ground. 
-
 
 Thankfully I've been joined in this project by the very talented Haiwei, who's ability to code puts my amateurish efforts to shame and has helped this addon improve significantly since its inception back in September 2024.
 
