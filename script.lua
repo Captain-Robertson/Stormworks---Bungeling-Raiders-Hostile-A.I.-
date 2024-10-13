@@ -21,7 +21,7 @@ local search_table_tile_size = 1600
 
 local tick_counter = 0
 
-local debug_mode = true
+local debug_mode = false
 local time_multiplier = 1
 
 local friendly_frequency = 999
@@ -533,9 +533,9 @@ end
 
 function updateVehicleMarkers(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-
+    server.removeMapObject(-1, vehicle_object.map_id)
     if g_savedata.show_markers then
-        server.removeMapObject(-1, vehicle_object.map_id)
+
         if not debug_mode then
 
             local label = string.format("Hostile %s sighted", vehicle_object.ai_type)
