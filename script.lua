@@ -206,8 +206,7 @@ function createCombatDestination(vehicle_id)
         return false
     end
     if not g_savedata.victim_vehicles[vehicle_object.target] then
-        setVehicleToPathing(vehicle_id)
-        return
+        return false
     end
     local target_transform, target_success = server.getVehiclePos(vehicle_object.target)
     if not target_success then
@@ -314,25 +313,24 @@ function updateVehicleInCombat(vehicle_id)
         setVehicleToPathing(vehicle_id)
         return
     end
+    local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
+    if not target_success then
+        setVehicleToWaiting(vehicle_id)
+    end
     if #vehicle_object.path > 0 then
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
         if vehicle_object.ai_type == TYPE_HELICOPTER then
-            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
-            if target_success then
-                local _, victim_altitude, _ = matrix.position(victim_transform)
-                local target_altitude = victim_altitude + 50
-                if vehicle_object.state.gun_run == true then
-                    server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
-                    server.setAIState(vehicle_object.driver, 3)
-                else
-                    server.setAITargetVehicle(vehicle_object.driver, -1)
-                    server.setAIState(vehicle_object.driver, 1)
-                end
-                server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+            local _, victim_altitude, _ = matrix.position(victim_transform)
+            local target_altitude = victim_altitude + 50
+            if vehicle_object.state.gun_run == true then
+                server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
+                server.setAIState(vehicle_object.driver, 3)
             else
-                setVehicleToWaiting(vehicle_id)
+                server.setAITargetVehicle(vehicle_object.driver, -1)
+                server.setAIState(vehicle_object.driver, 1)
             end
+            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
         else
             server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z)))
             server.setAIState(vehicle_object.driver, 1)
@@ -373,6 +371,10 @@ function setVehicleToCombat(vehicle_id)
         return
     end
     if vehicle_object.target == -1 then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    if not g_savedata.victim_vehicles[vehicle_object.target] then
         setVehicleToPathing(vehicle_id)
         return
     end
@@ -1047,19 +1049,24 @@ function trackVictims()
     for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
         --update every 5 seconds
         if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60 * 5) then
-            victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
-            insertToSearchTable(victim_vehicle_id)
-            server.removeMapID(-1, victim_vehicle.map_id)
-            if not debug_mode then
-                if not g_savedata.show_markers then
-                    if victim_vehicle.targeted then
-                        server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
-                        victim_vehicle.targeted = false
+            local transform, success = server.getVehiclePos(victim_vehicle_id)
+            if success then
+                victim_vehicle.transform = transform
+                insertToSearchTable(victim_vehicle_id)
+                server.removeMapID(-1, victim_vehicle.map_id)
+                if not debug_mode then
+                    if not g_savedata.show_markers then
+                        if victim_vehicle.targeted then
+                            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
+                            victim_vehicle.targeted = false
+                        end
                     end
+                else
+                    local label = string.format("Tracked victim %d %s",victim_vehicle_id, tostring(victim_vehicle.targeted))
+                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, label, 700, "", 255, 0, 0, 255)
                 end
             else
-                local label = string.format("Tracked victim %d %s",victim_vehicle_id, tostring(victim_vehicle.targeted))
-                server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, label, 700, "", 255, 0, 0, 255)
+                removeVictim(victim_vehicle_id)
             end
         end
     end
@@ -1124,7 +1131,7 @@ function insertToSearchTable(vehicle_id)
             --log(tostring(vehicle_id).." inserted at "..tostring(x)..","..tostring(z))
         end
     else
-        log("failed to get victim position"..tostring(vehicle_id))
+        removeVictim(vehicle_id)
     end
 end
 
@@ -1143,7 +1150,9 @@ function removeFromSearchTable(vehicle_id)
         x = math.floor((x + search_table_tile_size / 2) / search_table_tile_size)
         z = math.floor((z + search_table_tile_size / 2) / search_table_tile_size)
         local set = victim_search_table[x] and victim_search_table[x][z]
-        set[vehicle_id] = nil
+        if set ~= nil then
+            set[vehicle_id] = nil
+        end
     end
 end
 
