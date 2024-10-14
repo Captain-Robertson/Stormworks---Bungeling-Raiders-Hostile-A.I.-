@@ -16,6 +16,9 @@ g_savedata = {
 local built_locations = {}
 local unique_locations = {}
 
+local victim_search_table = {}
+local search_table_tile_size = 1600
+
 local tick_counter = 0
 
 local debug_mode = false
@@ -169,7 +172,7 @@ end
 function onVehicleUnload(vehicle_id)
     setVehicleToPseudo(vehicle_id)
 
-    removeVictim(vehicle_id)
+    --removeVictim(vehicle_id)
 end
 
 function onPlayerSit(peer_id, vehicle_id, seat_name)
@@ -178,10 +181,10 @@ end
 
 function onVehicleLoad(vehicle_id)
 
-    setVehicleToPathing(vehicle_id)
     setAltitude(vehicle_id)
     setNPCRoles(vehicle_id)
     setNPCSeats(vehicle_id)
+    setVehicleToPathing(vehicle_id)
 
     --check if vehicle loaded is registered as a victim
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
@@ -189,6 +192,7 @@ function onVehicleLoad(vehicle_id)
         if success then
             g_savedata.victim_vehicles[vehicle_id].transform = vehicle_pos
         end
+        insertToSearchTable(vehicle_id)
     else
         --if not a victim try make it one
         addVictim(vehicle_id, -1)
@@ -199,6 +203,9 @@ end
 function createCombatDestination(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if vehicle_object.target == nil then
+        return false
+    end
+    if not g_savedata.victim_vehicles[vehicle_object.target] then
         return false
     end
     local target_transform, target_success = server.getVehiclePos(vehicle_object.target)
@@ -306,25 +313,25 @@ function updateVehicleInCombat(vehicle_id)
         setVehicleToPathing(vehicle_id)
         return
     end
+    local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
+    if not target_success then
+        setVehicleToPathing(vehicle_id)
+    end
+
     if #vehicle_object.path > 0 then
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
         if vehicle_object.ai_type == TYPE_HELICOPTER then
-            local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
-            if target_success then
-                local _, victim_altitude, _ = matrix.position(victim_transform)
-                local target_altitude = victim_altitude + 50
-                if vehicle_object.state.gun_run == true then
-                    server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
-                    server.setAIState(vehicle_object.driver, 3)
-                else
-                    server.setAITargetVehicle(vehicle_object.driver, -1)
-                    server.setAIState(vehicle_object.driver, 1)
-                end
-                server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+            local _, victim_altitude, _ = matrix.position(victim_transform)
+            local target_altitude = victim_altitude + 50
+            if vehicle_object.state.gun_run == true then
+                server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
+                server.setAIState(vehicle_object.driver, 3)
             else
-                setVehicleToWaiting(vehicle_id)
+                server.setAITargetVehicle(vehicle_object.driver, -1)
+                server.setAIState(vehicle_object.driver, 1)
             end
+            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
         else
             server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z)))
             server.setAIState(vehicle_object.driver, 1)
@@ -347,7 +354,9 @@ function updateVehicleInCombat(vehicle_id)
         end
 
         if vehicle_object.current_damage < hp * 0.75 then
-            setVehicleToCombat(vehicle_id)
+            if targetNearestVictim(vehicle_id) then
+                setVehicleToCombat(vehicle_id)
+            end
         else
             setVehicleToWaiting(vehicle_id)
         end
@@ -365,6 +374,10 @@ function setVehicleToCombat(vehicle_id)
         return
     end
     if vehicle_object.target == -1 then
+        setVehicleToPathing(vehicle_id)
+        return
+    end
+    if not g_savedata.victim_vehicles[vehicle_object.target] then
         setVehicleToPathing(vehicle_id)
         return
     end
@@ -403,7 +416,7 @@ function updateVehicleInPathing(vehicle_id)
         setVehicleToWaiting(vehicle_id)
         return
     end
-    if TargetNearestVictim(vehicle_id) then
+    if targetNearestVictim(vehicle_id) then
         setVehicleToCombat(vehicle_id)
     end
 
@@ -447,6 +460,8 @@ end
 function updateVehicleInPseudo(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if not vehicle_object then return end
+
+    targetNearestVictim(vehicle_id)
 
     if vehicle_object.state.timer >= 60 * 15 then
         vehicle_object.state.timer = 0
@@ -509,7 +524,7 @@ function updateVehicleInWaiting(vehicle_id)
     if vehicle_object.state.timer >= wait_time then
         setVehicleToPathing(vehicle_id)
     end
-    if TargetNearestVictim(vehicle_id) then
+    if targetNearestVictim(vehicle_id) then
         if server.getVehicleSimulating(vehicle_id) then
             setVehicleToCombat(vehicle_id)
         end
@@ -527,9 +542,9 @@ end
 
 function updateVehicleMarkers(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-
+    server.removeMapObject(-1, vehicle_object.map_id)
     if g_savedata.show_markers then
-        server.removeMapObject(-1, vehicle_object.map_id)
+
         if not debug_mode then
 
             local label = string.format("Hostile %s sighted", vehicle_object.ai_type)
@@ -571,35 +586,45 @@ function updateVehicleMarkers(vehicle_id)
     end
 end
 
-function TargetNearestVictim(vehicle_id)
+function targetNearestVictim(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     local victim_vehicles = g_savedata.victim_vehicles
     if vehicle_object == nil then
         log("nil vehicle of id "..vehicle_id.." tried to find target")
         return false
     end
-    if not server.getVehicleSimulating(vehicle_id) then
-        return false
-    end
     --find nearest victim vehicle in range
     local nearest_victim_id = -1
     local nearest_distance = 3000
-    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
-        local vehicle_pos, success = server.getVehiclePos(vehicle_id)
-        if victim_vehicle ~= nil and success then
-            if inGreedyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
-                local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
-                if distance < nearest_distance then
-                    nearest_victim_id = victim_vehicle_id
-                    nearest_distance = distance
+    local vehicle_pos, success = server.getVehiclePos(vehicle_id)
+    if not success then
+        return false
+    end
+    local x,_,z = matrix.position(vehicle_pos)
+    x = math.floor((x+ search_table_tile_size / 2) / search_table_tile_size)
+    z = math.floor((z+ search_table_tile_size / 2) / search_table_tile_size)
+    for dx=-1,1 do
+        for dz=-1,1 do
+            local set = victim_search_table[x+dx] and victim_search_table[x+dx][z+dz]
+            if set ~= nil then
+                for victim_vehicle_id, _ in pairs(set) do
+                    local victim_vehicle = victim_vehicles[victim_vehicle_id]
+                    if victim_vehicle ~= nil and success then
+                        if inGreedyBoxRange(victim_vehicle.transform, vehicle_pos, 3000) then
+                            local distance = manhattanDistance(victim_vehicle.transform, vehicle_pos)
+                            if distance < nearest_distance then
+                                nearest_victim_id = victim_vehicle_id
+                                nearest_distance = distance
+                            end
+                        end
+                    end
                 end
+
             end
         end
     end
-    if not g_savedata.show_markers then
-        if nearest_victim_id ~= -1 then
-            victim_vehicles[nearest_victim_id].targeted = true
-        end
+    if nearest_victim_id ~= -1 then
+        victim_vehicles[nearest_victim_id].targeted = true
     end
     vehicle_object.target = nearest_victim_id
     return vehicle_object.target ~= -1
@@ -665,27 +690,6 @@ function updateVehicles()
             end
         end
     end
-end
-
-function trackVictims()
-    local victim_vehicles = g_savedata.victim_vehicles
-    --track position of victim vehicles
-    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
-        --update every 5 seconds
-        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60 * 5) then
-            victim_vehicle.transform = server.getVehiclePos(victim_vehicle_id)
-            if not g_savedata.show_markers then
-                if victim_vehicle.targeted then
-                    server.removeMapID(-1, victim_vehicle.map_id)
-                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, v_x, v_z, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
-                    victim_vehicle.targeted = false
-                else
-                    server.removeMapID(-1, victim_vehicle.map_id)
-                end
-            end
-        end
-    end
-
 end
 
 function changeFriendlyFrequency()
@@ -962,13 +966,14 @@ function hasTag(tags, tag)
 end
 
 function killReward(vehicle_id)
-    if g_savedata.vehicles[vehicle_id] == nil then
+    local vehicle_object = g_savedata.vehicles[vehicle_id]
+    if vehicle_object == nil then
         return
     end
 
-    local reward_amount = g_savedata.vehicles[vehicle_id].reward
+    local reward_amount = vehicle_object.reward
     if reward_amount > 0 then
-        server.notify(-1, "Enemy destroyed", "Rewarded $ " .. math.floor(reward_amount), 9)
+        server.notify(-1, string.format("Enemy %s destroyed", vehicle_object.ai_type), "Rewarded $ " .. math.floor(reward_amount), 9)
         server.setCurrency(server.getCurrency() + reward_amount)
     end
 end
@@ -1041,9 +1046,42 @@ function cleanupVehicle(vehicle_id)
     end
 end
 
+function trackVictims()
+    local victim_vehicles = g_savedata.victim_vehicles
+    --track position of victim vehicles
+    for victim_vehicle_id, victim_vehicle in pairs(victim_vehicles) do
+        --update every 5 seconds
+        if victim_vehicle ~= nil and isTickID(victim_vehicle_id, 60 * 5) then
+            local transform, success = server.getVehiclePos(victim_vehicle_id)
+            if success then
+                victim_vehicle.transform = transform
+                insertToSearchTable(victim_vehicle_id)
+                server.removeMapID(-1, victim_vehicle.map_id)
+                if not debug_mode then
+                    if not g_savedata.show_markers then
+                        if victim_vehicle.targeted then
+                            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
+                            victim_vehicle.targeted = false
+                        end
+                    end
+                else
+                    local label = string.format("Tracked victim %d %s",victim_vehicle_id, tostring(victim_vehicle.targeted))
+                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, label, 700, "", 255, 0, 0, 255)
+                end
+            else
+                removeVictim(victim_vehicle_id)
+            end
+        end
+    end
+    updateSearchTable()
+end
+
 function addVictim(vehicle_id, peer_id)
     local vehicle_transform, pos_success = server.getVehiclePos(vehicle_id)
     if not pos_success then
+        return
+    end
+    if g_savedata.vehicles[vehicle_id] ~= nil then
         return
     end
     if peer_id ~= -1 then
@@ -1073,14 +1111,66 @@ function addVictim(vehicle_id, peer_id)
             transform = vehicle_transform,
             map_id = server.getMapID(),
         }
+        insertToSearchTable(vehicle_id)
+
         return
+    end
+end
+
+function insertToSearchTable(vehicle_id)
+    local victim_transform, transform_success = server.getVehiclePos(vehicle_id)
+    if transform_success then
+        local x,_,z = matrix.position(victim_transform)
+        x = math.floor((x+ search_table_tile_size / 2) / search_table_tile_size)
+        z = math.floor((z+ search_table_tile_size / 2) / search_table_tile_size)
+        if victim_search_table[x] == nil then
+            victim_search_table[x] = {}
+        end
+        if victim_search_table[x][z] == nil then
+            victim_search_table[x][z] = {}
+        end
+        if victim_search_table[x][z][vehicle_id] ~= true then
+            victim_search_table[x][z][vehicle_id] = true
+            --log(tostring(vehicle_id).." inserted at "..tostring(x)..","..tostring(z))
+        end
+    else
+        removeVictim(vehicle_id)
     end
 end
 
 function removeVictim(vehicle_id)
     if g_savedata.victim_vehicles[vehicle_id] ~= nil then
+        removeFromSearchTable(vehicle_id)
         server.removeMapID(-1, g_savedata.victim_vehicles[vehicle_id].map_id)
         g_savedata.victim_vehicles[vehicle_id] = nil
+    end
+end
+
+function removeFromSearchTable(vehicle_id)
+    local victim_transform, transform_success = server.getVehiclePos(vehicle_id)
+    if transform_success then
+        local x,_,z = matrix.position(victim_transform)
+        x = math.floor((x + search_table_tile_size / 2) / search_table_tile_size)
+        z = math.floor((z + search_table_tile_size / 2) / search_table_tile_size)
+        local set = victim_search_table[x] and victim_search_table[x][z]
+        if set ~= nil then
+            set[vehicle_id] = nil
+        end
+    end
+end
+
+function updateSearchTable()
+    if not isTickID(0,60*5) then
+        return
+    end
+    for x, row in pairs(victim_search_table) do
+        for z, set in pairs(row) do
+            for vehicle_id, _ in pairs(set) do
+                --log(tostring(vehicle_id).. " at (".. tostring(x).. ",".. tostring(z).. ")")
+                set[vehicle_id] = nil
+                insertToSearchTable(vehicle_id)
+            end
+        end
     end
 end
 
