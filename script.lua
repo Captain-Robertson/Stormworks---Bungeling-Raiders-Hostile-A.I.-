@@ -297,7 +297,17 @@ function createPath(vehicle_id)
             avoid_tags = "size=null,size=small"
         end
 
-        path_list = server.pathfind(vehicle_pos, (matrix.translation(vehicle_object.destination.x, 50, vehicle_object.destination.z)), "ocean_path", avoid_tags)
+        local destination_pos = matrix.translation(vehicle_object.destination.x,0, vehicle_object.destination.z)
+        local distance = matrix.distance(vehicle_pos, destination_pos)
+        local crush_depth = getCrushAltitude(vehicle_id)
+        if server.getOceanFloor(vehicle_pos) < crush_depth and server.getOceanFloor(destination_pos) < crush_depth and distance < 1000 then
+            path_list = {{ x = vehicle_object.destination.x,
+                           z = vehicle_object.destination.z,
+                           ui_id = server.getMapID() }}
+        else
+            path_list = server.pathfind(vehicle_pos, (matrix.translation(vehicle_object.destination.x, 50, vehicle_object.destination.z)), "ocean_path", avoid_tags)
+        end
+
         for _, path in pairs(path_list) do
             path.ui_id = server.getMapID()
         end
@@ -317,10 +327,17 @@ function updateVehicleInCombat(vehicle_id)
     if not target_success then
         setVehicleToPathing(vehicle_id)
     end
+    local previous_target = vehicle_object.target
+    if targetNearestVictim(vehicle_id) then
+        if previous_target ~= vehicle_object.target then
+            setVehicleToCombat(vehicle_id)
+        end
+    end
 
     if #vehicle_object.path > 0 then
         local vehicle_pos = server.getVehiclePos(vehicle_id)
-        local distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
+        local vehicle_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
+        local victim_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], victim_transform)
         if vehicle_object.ai_type == TYPE_HELICOPTER then
             local _, victim_altitude, _ = matrix.position(victim_transform)
             local target_altitude = victim_altitude + 50
@@ -340,7 +357,7 @@ function updateVehicleInCombat(vehicle_id)
         refuel(vehicle_id)
         reload(vehicle_id)
 
-        if distance < 100 then
+        if vehicle_distance < 100 or victim_distance > vehicle_object.orbit_radius*1.15 then
             vehicle_object.state.timer = 0
             server.removeMapLine(-1, vehicle_object.path[1].ui_id)
             table.remove(vehicle_object.path, 1)
@@ -555,7 +572,9 @@ function updateVehicleMarkers(vehicle_id)
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
         else
             local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
-            local description = string.format("state - %s\ntimer - %d", vehicle_object.state.s, vehicle_object.state.timer)
+            local vehicle_pos = server.getVehiclePos(vehicle_id)
+            local ocean_floor = server.getOceanFloor(vehicle_pos)
+            local description = string.format("state : %s\ntimer : %d\nocean_floor : %f", vehicle_object.state.s, vehicle_object.state.timer, ocean_floor)
 
             server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
                     label, vehicle_object.vision_radius,
@@ -626,6 +645,7 @@ function targetNearestVictim(vehicle_id)
     if nearest_victim_id ~= -1 then
         victim_vehicles[nearest_victim_id].targeted = true
     end
+
     vehicle_object.target = nearest_victim_id
     return vehicle_object.target ~= -1
 end
@@ -1061,12 +1081,14 @@ function trackVictims()
                     if not g_savedata.show_markers then
                         if victim_vehicle.targeted then
                             server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
-                            victim_vehicle.targeted = false
                         end
                     end
                 else
                     local label = string.format("Tracked victim %d %s",victim_vehicle_id, tostring(victim_vehicle.targeted))
                     server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, label, 700, "", 255, 0, 0, 255)
+                end
+                if victim_vehicle.targeted then
+                    victim_vehicle.targeted = false
                 end
             else
                 removeVictim(victim_vehicle_id)
