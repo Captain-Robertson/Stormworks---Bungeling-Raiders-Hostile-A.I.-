@@ -83,13 +83,16 @@ function onCreate(is_world_create)
                 vehicle_object.state.s = "pseudo"
             end
             if vehicle_object.bounds == nil then
-                vehicle_object.bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000 }
+                vehicle_object.bounds = { x_min = -110000, z_min = -110000, x_max = 110000, z_max = 110000 }
             end
             if vehicle_object.current_damage == nil then
                 vehicle_object.current_damage = 0
             end
             if vehicle_object.despawn_timer == nil then
                 vehicle_object.despawn_timer = 0
+            end
+            if vehicle_object.marker_timer == nil then
+                vehicle_object.marker_timer = 0
             end
             if vehicle_data ~= nil then
                 if vehicle_object.reward == nil then
@@ -117,7 +120,7 @@ function build_locations(playlist_index, location_index)
 
     local is_valid = false
     local is_unique = false
-    local bounds = { x_min = -40000, z_min = -40000, x_max = 40000, z_max = 140000 }
+    local bounds = { x_min = -110000, z_min = -110000, x_max = 110000, z_max = 110000 }
 
     for object_index, object_data in iterObjects(playlist_index, location_index) do
 
@@ -557,7 +560,7 @@ function setVehicleToWaiting(vehicle_id)
     vehicle_object.state.timer = 0
 end
 
-function updateVehicleMarkers(vehicle_id)
+function updateVehicleMarkers(vehicle_id, update_rate)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     server.removeMapObject(-1, vehicle_object.map_id)
     if g_savedata.show_markers then
@@ -566,10 +569,45 @@ function updateVehicleMarkers(vehicle_id)
 
             local label = string.format("Hostile %s sighted", vehicle_object.ai_type)
             local description = string.format("A %s sized %s belonging to the Bungeling Empire has been spotted at this location, moving at high speed. ",vehicle_object.size,vehicle_object.ai_type)
-
+            
+            --[[ code for vehicle following marker
             server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
                     label, vehicle_object.vision_radius,
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+            ]]--
+
+            local on_duration = 60 * 6
+            local off_duration = 60 * 2
+
+            -- marker_timer positive is how long it should stay for
+            -- marker_timer negative is how long it has been unmarked for
+            if vehicle_object.marker_timer > 0 then
+                local marker_position = vehicle_object.marker_position
+                if marker_position ~= nil then
+                    server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
+                        label, vehicle_object.vision_radius,
+                        description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                    -- subtract by how many ticks it has been since last update
+                end
+                
+            else
+                -- check if should create marker
+                if vehicle_object.marker_timer < -off_duration then
+                    local vehicle_transform, success = server.getvehiclePos(vehicle_id)
+                    if success then
+
+                        vehicle_object.marker_timer = on_duration
+                        local _x,_,_z = matrix.position(vehicle_transform)
+                        local angle = math.random(0,math.pi*2)
+                        _x = _x + math.cos(angle) * vehicle_object.vision_radius
+                        _z = _z + math.sin(angle) * vehicle_object.vision_radius
+                        vehicle_object.marker_position = {x=_x,z=_z}
+                    else
+                        log("failed to get vehicle "..tostring(vehicle_id).." position while creating marker")
+                    end
+                end
+            end
+            vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
         else
             local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
             local vehicle_pos = server.getVehiclePos(vehicle_id)
@@ -690,7 +728,7 @@ function updateVehicles()
                 updateVehicleInPseudo(vehicle_id)
             end
 
-            updateVehicleMarkers(vehicle_id)
+            updateVehicleMarkers(vehicle_id, update_rate)
             updateVehicleGunners(vehicle_id)
 
             local hp = vehicle_object.hp
@@ -1293,7 +1331,8 @@ function spawnVehicle(location, spawn_transform)
         size = spawned_objects.vehicle.size,
         current_damage = 0,
         despawn_timer = 0,
-        ai_type = spawned_objects.vehicle.ai_type
+        ai_type = spawned_objects.vehicle.ai_type,
+        marker_timer = 0
     }
     local vehicle_data, success = server.getVehicleData(vehicle_id)
     if not success then
