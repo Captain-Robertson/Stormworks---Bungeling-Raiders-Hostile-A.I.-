@@ -576,8 +576,8 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             ]]--
 
-            local on_duration = 60 * 6
-            local off_duration = 60 * 2
+            local on_duration = 60 * 30
+            local off_duration = 60 * 15
 
             -- marker_timer positive is how long it should stay for
             -- marker_timer negative is how long it has been unmarked for
@@ -593,21 +593,22 @@ function updateVehicleMarkers(vehicle_id, update_rate)
             else
                 -- check if should create marker
                 if vehicle_object.marker_timer < -off_duration then
-                    local vehicle_transform, success = server.getvehiclePos(vehicle_id)
+                    local vehicle_transform, success = server.getVehiclePos(vehicle_id)
                     if success then
 
                         vehicle_object.marker_timer = on_duration
                         local _x,_,_z = matrix.position(vehicle_transform)
-                        local angle = math.random(0,math.pi*2)
-                        _x = _x + math.cos(angle) * vehicle_object.vision_radius
-                        _z = _z + math.sin(angle) * vehicle_object.vision_radius
+                        local angle = math.random()*math.pi*2
+                        local dist = vehicle_object.vision_radius * math.random()
+                        _x = _x + math.cos(angle) * dist
+                        _z = _z + math.sin(angle) * dist
                         vehicle_object.marker_position = {x=_x,z=_z}
                     else
                         log("failed to get vehicle "..tostring(vehicle_id).." position while creating marker")
                     end
                 end
             end
-            vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
+            vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate * math.random()
         else
             local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
             local vehicle_pos = server.getVehiclePos(vehicle_id)
