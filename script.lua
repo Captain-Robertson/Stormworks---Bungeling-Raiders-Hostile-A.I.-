@@ -598,7 +598,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                         end
                         server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
                             label, vehicle_object.vision_radius,
-                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], math.min(math.ceil(vehicle_object.marker_timer/on_duration*256 / 4) * 64,255))
+                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], math.min(math.ceil(vehicle_object.marker_timer/on_duration*256 / 16) * 64,255))
                     end
                 end
             end
@@ -613,7 +613,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                     label, vehicle_object.vision_radius,
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
         end
-        vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate * math.random()
+        vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
         if vehicle_object.marker_timer < -off_duration then
             local chance = (-off_duration - vehicle_object.marker_timer) / (off_duration * 3)
             if math.random() < chance then
