@@ -259,14 +259,10 @@ function createDestination(vehicle_id)
 
     local vehicle_object = g_savedata.vehicles[vehicle_id]
 
-    local random_transform = matrix.translation(math.random(vehicle_object.bounds.x_min, vehicle_object.bounds.x_max), 0, math.random(vehicle_object.bounds.z_min, vehicle_object.bounds.z_max))
-    local target_pos, is_success = server.getOceanTransform(random_transform, 1000, 10000)
-
-    if is_success == false then
+    local destination_pos = findSuitableLocation(vehicle_object.ai_type)
+    if destination_pos == nil then
         return false
     end
-
-    local destination_pos = matrix.multiply(target_pos, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
     local dest_x, _, dest_z = matrix.position(destination_pos)
 
     vehicle_object.destination.x = dest_x
@@ -562,6 +558,10 @@ end
 
 function updateVehicleMarkers(vehicle_id, update_rate)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
+
+    local on_duration = 60 * 60 * 1
+    local off_duration = 60 * 60 * 1
+
     server.removeMapObject(-1, vehicle_object.map_id)
     if g_savedata.show_markers then
 
@@ -576,48 +576,59 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
             ]]--
 
-            local on_duration = 60 * 30
-            local off_duration = 60 * 15
+            
 
             -- marker_timer positive is how long it should stay for
             -- marker_timer negative is how long it has been unmarked for
             if vehicle_object.marker_timer > 0 then
                 local marker_position = vehicle_object.marker_position
                 if marker_position ~= nil then
-                    server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
-                        label, vehicle_object.vision_radius,
-                        description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
-                    -- subtract by how many ticks it has been since last update
-                end
-                
-            else
-                -- check if should create marker
-                if vehicle_object.marker_timer < -off_duration then
                     local vehicle_transform, success = server.getVehiclePos(vehicle_id)
                     if success then
-
-                        vehicle_object.marker_timer = on_duration
-                        local _x,_,_z = matrix.position(vehicle_transform)
-                        local angle = math.random()*math.pi*2
-                        local dist = vehicle_object.vision_radius * math.random()
-                        _x = _x + math.cos(angle) * dist
-                        _z = _z + math.sin(angle) * dist
-                        vehicle_object.marker_position = {x=_x,z=_z}
-                    else
-                        log("failed to get vehicle "..tostring(vehicle_id).." position while creating marker")
+                        if matrix.distance(vehicle_transform, matrix.translation(marker_position.x,0,marker_position.z)) > vehicle_object.vision_radius then
+                            local _x,_,_z = matrix.position(vehicle_transform)
+                            local angle = math.random()*math.pi*2
+                            local dist = vehicle_object.vision_radius * math.random()
+                            _x = _x + math.cos(angle) * dist
+                            _z = _z + math.sin(angle) * dist
+                            vehicle_object.marker_position = {x=_x,z=_z}
+                        end
+                        server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
+                            label, vehicle_object.vision_radius,
+                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
                     end
                 end
             end
-            vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate * math.random()
+            
         else
             local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
             local vehicle_pos = server.getVehiclePos(vehicle_id)
             local ocean_floor = server.getOceanFloor(vehicle_pos)
-            local description = string.format("state : %s\ntimer : %d\nocean_floor : %f", vehicle_object.state.s, vehicle_object.state.timer, ocean_floor)
+            local description = string.format("state : %s\ntimer : %d\nocean_floor : %f\nmarker_timer : %f", vehicle_object.state.s, vehicle_object.state.timer, ocean_floor, vehicle_object.marker_timer)
 
             server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
                     label, vehicle_object.vision_radius,
                     description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+        end
+        vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate * math.random()
+        if vehicle_object.marker_timer < -off_duration then
+            local chance = (-off_duration - vehicle_object.marker_timer) / (off_duration * 3)
+            if math.random() < chance then
+                -- check if should create marker
+                local vehicle_transform, success = server.getVehiclePos(vehicle_id)
+                if success then
+
+                    vehicle_object.marker_timer = on_duration
+                    local _x,_,_z = matrix.position(vehicle_transform)
+                    local angle = math.random()*math.pi*2
+                    local dist = vehicle_object.vision_radius * math.random()
+                    _x = _x + math.cos(angle) * dist
+                    _z = _z + math.sin(angle) * dist
+                    vehicle_object.marker_position = {x=_x,z=_z}
+                else
+                    log("failed to get vehicle "..tostring(vehicle_id).." position while creating marker")
+                end
+            end
         end
     end
 
