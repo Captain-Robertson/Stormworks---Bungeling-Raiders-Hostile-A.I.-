@@ -47,9 +47,7 @@ function onCreate(is_world_create)
 
             local location = getRandomLocation()
 
-            local random_transform = matrix.translation(math.random(location.objects.vehicle.bounds.x_min, location.objects.vehicle.bounds.x_max), 0, math.random(location.objects.vehicle.bounds.z_min, location.objects.vehicle.bounds.z_max))
-
-            local spawn_transform, is_success = server.getOceanTransform(random_transform, 1000, 10000)
+            local spawn_transform = findSuitableLocation(location.ai_type)
             spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
 
             if is_success then
@@ -120,6 +118,7 @@ function build_locations(playlist_index, location_index)
 
     local is_valid = false
     local is_unique = false
+    local _ai_type = TYPE_HELICOPTER
     local bounds = { x_min = -110000, z_min = -110000, x_max = 110000, z_max = 110000 }
 
     for object_index, object_data in iterObjects(playlist_index, location_index) do
@@ -130,8 +129,12 @@ function build_locations(playlist_index, location_index)
         for _, tag_object in pairs(object_data.tags) do
             if tag_object == "type=enemy_ai_boat" then
                 is_valid = true
+                _ai_type = TYPE_VESSEL
             elseif tag_object == "type=enemy_ai_heli" then
                 is_valid = true
+                _ai_type = TYPE_HELICOPTER
+            elseif tag_object == "submarine" then
+                _ai_type = TYPE_SUBMARINE
             elseif tag_object == "unique" then
                 is_unique = true
             elseif string.find(tag_object, "x_min=") ~= nil then
@@ -164,9 +167,9 @@ function build_locations(playlist_index, location_index)
             mission_objects.vehicle.bounds = bounds
 
             if is_unique then
-                table.insert(unique_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects })
+                table.insert(unique_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects, ai_type=_ai_type })
             else
-                table.insert(built_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects })
+                table.insert(built_locations, { playlist_index = playlist_index, location_index = location_index, data = location_data, objects = mission_objects, ai_type = _ai_type })
             end
         end
     end
@@ -805,8 +808,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
     end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
-            setting_name = arg1
-            new_value = arg2
+            local setting_name = arg1
+            local new_value = arg2
             if setting_name == "allow_missiles" then
                 g_savedata.allow_missiles = new_value == "true"
             elseif setting_name == "show_markers" then
@@ -1055,6 +1058,44 @@ function onVehicleDespawn(vehicle_id, peer_id)
     cleanupVehicle(vehicle_id)
 end
 
+function findSuitableLocation(ai_type)
+    if ai_type == nil then
+        return nil
+    end
+    local random_location = matrix.translation(math.random(-110000, 110000), 0, math.random(-110000, 110000))
+
+    local dist_to_sawyer = matrix.distance(matrix.translation(1500, 0, -7000), random_location)
+    local dist_to_arctic = matrix.distance(matrix.translation(-25000, 0, 90000), random_location)
+    local dist_to_meier = matrix.distance(matrix.translation(-12000, 0, -30000), random_location)
+    
+    local closest_point = dist_to_sawyer
+    if dist_to_arctic < closest_point then
+        closest_point = dist_to_arctic
+    end
+    if dist_to_meier < closest_point then
+        closest_point = dist_to_meier
+    end
+
+    local avg_dist = (dist_to_sawyer + dist_to_meier + dist_to_arctic) / 3
+
+    if closest_point > 20000 then
+        -- if it's far out, re-roll 90% of the time
+        if math.random() < 0.90 or avg_dist > 80000 then
+            return findSuitableLocation(ai_type)
+        end
+    end
+    if ai_type == TYPE_VESSEL or ai_type == TYPE_SUBMARINE then
+        local success = False
+        random_location, success = server.getOceanTransform(random_location, 0, 5000)
+        if not success then
+            return findSuitableLocation(ai_type)
+        end
+    end
+    random_location = matrix.multiply(random_location, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
+    return random_location
+
+end
+
 function respawnLosses(instant)
     --count current number of vehicles
     local vehicle_count = 0
@@ -1084,12 +1125,11 @@ function respawnLosses(instant)
         local random_player = players[math.random(1, #players)]
         local random_player_transform = server.getPlayerPos(random_player.id)
 
-        --find random ocean tile near that player (10k-40k range)
-        local spawn_transform, is_success = server.getOceanTransform(random_player_transform, 5000, 30000)
+        local spawn_transform = findSuitableLocation(location.ai_type)
         --put the vehicle randomly in the tile
-        spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
+        
 
-        if is_success then
+        if spawn_transform ~= nil then
             return spawnVehicle(location, spawn_transform)
         end
         return -1
