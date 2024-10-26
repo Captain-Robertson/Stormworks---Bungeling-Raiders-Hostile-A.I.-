@@ -598,7 +598,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                         end
                         server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
                             label, vehicle_object.vision_radius,
-                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], math.min(math.ceil(vehicle_object.marker_timer/on_duration*256 / 4) * 64,255))
                     end
                 end
             end
@@ -1513,13 +1513,13 @@ function setSizeData(vehicle_id)
     if vehicle_object ~= nil then
         if vehicle_object.size == "small" then
             vehicle_object.hp = 4000
-            vehicle_object.vision_radius = 2000
+            vehicle_object.vision_radius = 1000
             vehicle_object.orbit_radius = 500
             vehicle_object.explosion_size = 0.6
             vehicle_object.icon_colour = { 255, 255, 0 }
         elseif vehicle_object.size == "medium" then
             vehicle_object.hp = 10000
-            vehicle_object.vision_radius = 2000
+            vehicle_object.vision_radius = 1500
             vehicle_object.orbit_radius = 750
             vehicle_object.explosion_size = 1.0
             vehicle_object.icon_colour = { 255, 125, 0 }
