@@ -1051,7 +1051,7 @@ function killReward(vehicle_id)
     local reward_amount = vehicle_object.reward
     if reward_amount > 0 then
         server.notify(-1, string.format("Enemy %s destroyed", vehicle_object.ai_type), "Rewarded $ " .. math.floor(reward_amount), 9)
-        server.setCurrency(server.getCurrency() + reward_amount)
+        server.setCurrency(server.getCurrency() + reward_amount, server.getResearchPoints())
     end
 end
 
