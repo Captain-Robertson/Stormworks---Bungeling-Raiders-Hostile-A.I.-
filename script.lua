@@ -23,7 +23,7 @@ local search_table_tile_size = 1600
 local tick_counter = 0
 
 local debug_mode = false
-local verbose = false
+local verbose = true
 local time_multiplier = 1
 
 local friendly_frequency = 999
@@ -607,11 +607,16 @@ function updateVehicleMarkers(vehicle_id, update_rate)
             local label = string.format("%d %s", vehicle_id, vehicle_object.ai_type)
             local vehicle_pos = server.getVehiclePos(vehicle_id)
             local ocean_floor = server.getOceanFloor(vehicle_pos)
-            local description = string.format("state : %s\ntimer : %d\nocean_floor : %f\nmarker_timer : %f", vehicle_object.state.s, vehicle_object.state.timer, ocean_floor, vehicle_object.marker_timer)
-
-            server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
-                    label, vehicle_object.vision_radius,
-                    description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+            local hp = vehicle_object.hp * (g_savedata.hp_modifier or 1)
+            local damage = vehicle_object.current_damage
+            local description = string.format("state : %s\ntimer : %d\nocean_floor : %f\nmarker_timer : %f\n damage : %f / %f", vehicle_object.state.s, vehicle_object.state.timer, ocean_floor, vehicle_object.marker_timer, damage, hp)
+            local vehicle_transform, success = server.getVehiclePos(vehicle_id)
+            if success then
+                local x,_,z = matrix.position(vehicle_transform)
+                server.addMapObject(-1, vehicle_object.map_id, 0, 18, x, z, 0, 0, -1, 0,
+                        label, vehicle_object.vision_radius,
+                        description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], 255)
+            end
         end
         vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
         if vehicle_object.marker_timer < -off_duration then
@@ -802,9 +807,11 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
     end
     if command == "?hostile_ai_debug" then
         debug_mode = not debug_mode
+        log("debug mode: ".. tostring(debug_mode))
     end
     if command == "?hostile_ai_verbose" then
         verbose = not verbose
+        log("verbose")
     end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
@@ -1070,26 +1077,18 @@ function findSuitableLocation(ai_type, attempts)
     end
 
     local random_location = matrix.translation(math.random(-110000, 110000), 0, math.random(-110000, 110000))
-
+    
     local dist_to_sawyer = matrix.distance(matrix.translation(1500, 0, -7000), random_location)
-    local dist_to_arctic = matrix.distance(matrix.translation(-25000, 0, 90000), random_location)
+    local dist_to_arctic = matrix.distance(matrix.translation(-30000, 0, 90000), random_location)
     local dist_to_meier = matrix.distance(matrix.translation(-12000, 0, -30000), random_location)
     
-    local closest_point = dist_to_sawyer
-    if dist_to_arctic < closest_point then
-        closest_point = dist_to_arctic
-    end
-    if dist_to_meier < closest_point then
-        closest_point = dist_to_meier
-    end
+    local sum_dist = dist_to_sawyer + dist_to_arctic + dist_to_meier
+    local min_dist = math.min(dist_to_arctic, math.min(dist_to_sawyer, dist_to_meier))
+    local avg_dist = sum_dist / 3
+    local reroll_chance = (avg_dist/2 + min_dist) / (10 * 10000)
 
-    local avg_dist = (dist_to_sawyer + dist_to_meier + dist_to_arctic) / 3
-
-    if closest_point > 20000 then
-        -- re-roll if location is undesirable
-        if math.random() < 0.90 or avg_dist > 80000 then
-            return findSuitableLocation(ai_type, attempts+1)
-        end
+    if math.random() < reroll_chance then
+        return findSuitableLocation(ai_type, attempts+1)
     end
     if ai_type == TYPE_VESSEL or ai_type == TYPE_SUBMARINE then
         local success = false
@@ -1181,8 +1180,9 @@ function trackVictims()
                         end
                     end
                 else
+                    local x,_,z = matrix.position(transform)
                     local label = string.format("Tracked victim %d %s",victim_vehicle_id, tostring(victim_vehicle.targeted))
-                    server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, label, 700, "", 255, 0, 0, 255)
+                    --server.addMapObject(-1, victim_vehicle.map_id, 0, 19, x, z, 0, 0, -1, 0, label, 700, "", 255, 0, 0, 255)
                 end
                 if victim_vehicle.targeted then
                     victim_vehicle.targeted = false
