@@ -48,12 +48,12 @@ function onCreate(is_world_create)
         for _ = 1, math.min(g_savedata.start_vehicle_count, g_savedata.max_vehicle_count) do
 
             local location = getRandomLocation()
+            if location ~= nil then
+                local spawn_transform = findSuitableLocation(location.ai_type)
 
-            local spawn_transform = findSuitableLocation(location.ai_type)
-            spawn_transform = matrix.multiply(spawn_transform, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
-
-            if is_success then
-                spawnVehicle(location, spawn_transform)
+                if spawn_transform ~= nil then
+                    spawnVehicle(location, spawn_transform)
+                end
             end
         end
     else
@@ -1058,10 +1058,17 @@ function onVehicleDespawn(vehicle_id, peer_id)
     cleanupVehicle(vehicle_id)
 end
 
-function findSuitableLocation(ai_type)
+function findSuitableLocation(ai_type, attempts)
     if ai_type == nil then
         return nil
     end
+    attempts = attempts or 0
+
+    if attempts > 20 then
+        log("failed to find suitable location for ".. ai_type)
+        return nil
+    end
+
     local random_location = matrix.translation(math.random(-110000, 110000), 0, math.random(-110000, 110000))
 
     local dist_to_sawyer = matrix.distance(matrix.translation(1500, 0, -7000), random_location)
@@ -1079,16 +1086,16 @@ function findSuitableLocation(ai_type)
     local avg_dist = (dist_to_sawyer + dist_to_meier + dist_to_arctic) / 3
 
     if closest_point > 20000 then
-        -- if it's far out, re-roll 90% of the time
+        -- re-roll if location is undesirable
         if math.random() < 0.90 or avg_dist > 80000 then
-            return findSuitableLocation(ai_type)
+            return findSuitableLocation(ai_type, attempts+1)
         end
     end
     if ai_type == TYPE_VESSEL or ai_type == TYPE_SUBMARINE then
-        local success = False
+        local success = false
         random_location, success = server.getOceanTransform(random_location, 0, 5000)
         if not success then
-            return findSuitableLocation(ai_type)
+            return findSuitableLocation(ai_type, attempts+1)
         end
     end
     random_location = matrix.multiply(random_location, matrix.translation(math.random(-500, 500), 0, math.random(-500, 500)))
@@ -1125,8 +1132,8 @@ function respawnLosses(instant)
         local random_player = players[math.random(1, #players)]
         local random_player_transform = server.getPlayerPos(random_player.id)
 
+        -- find random suitable location for the given vehicle type
         local spawn_transform = findSuitableLocation(location.ai_type)
-        --put the vehicle randomly in the tile
         
 
         if spawn_transform ~= nil then
