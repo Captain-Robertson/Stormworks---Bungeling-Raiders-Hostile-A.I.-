@@ -22,6 +22,7 @@ local search_table_tile_size = 1600
 local tick_counter = 0
 
 local debug_mode = false
+local verbose = false
 local time_multiplier = 1
 
 local friendly_frequency = 999
@@ -806,6 +807,9 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
     if command == "?hostile_ai_debug" then
         debug_mode = not debug_mode
     end
+    if command == "?hostile_ai_verbose" then
+        verbose = not verbose
+    end
     if command == "?hostile_ai_settings" then
         if arg1 ~= nil or arg2 ~= nil then
             local setting_name = arg1
@@ -1544,7 +1548,7 @@ function announce(message)
 end
 
 function log(message)
-    if not debug_mode then
+    if not verbose then
         return
     end
     server.announce("hostile_ai", "DEBUG:" .. message)
