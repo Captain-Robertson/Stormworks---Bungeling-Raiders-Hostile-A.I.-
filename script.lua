@@ -616,7 +616,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
         vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
         if vehicle_object.marker_timer < -off_duration then
             local chance = (-off_duration - vehicle_object.marker_timer) / (off_duration * 3)
-            if math.random() < chance then
+            if math.random() <= chance then
                 -- check if should create marker
                 local vehicle_transform, success = server.getVehiclePos(vehicle_id)
                 if success then
@@ -1194,6 +1194,9 @@ function addVictim(vehicle_id, peer_id)
         return
     end
     if g_savedata.vehicles[vehicle_id] ~= nil then
+        return
+    end
+    if g_savedata.victim_vehicles[vehicle_id] ~= nil then
         return
     end
     if peer_id ~= -1 then
