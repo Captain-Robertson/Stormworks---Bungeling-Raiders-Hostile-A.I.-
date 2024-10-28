@@ -1,3 +1,4 @@
+---@diagnostic disable: lowercase-global
 g_savedata = {
     show_markers = property.checkbox("Show hostile vessels on the map", true),
     allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
@@ -66,10 +67,6 @@ function onCreate(is_world_create)
             g_savedata.respawn_frequency = g_savedata.respawn_frequency or 5
             g_savedata.max_vehicle_size = g_savedata.max_vehicle_size or 3
             g_savedata.hp_modifier = g_savedata.hp_modifier or 1
-            if not success then
-                log("failed to get vehicle data when initiating")
-                vehicle_data = nil
-            end
             if vehicle_object.path == nil then
                 if createDestination(vehicle_id) then
                     vehicle_object.path = createPath(vehicle_id)
@@ -93,7 +90,7 @@ function onCreate(is_world_create)
             if vehicle_object.marker_timer == nil then
                 vehicle_object.marker_timer = 0
             end
-            if vehicle_data ~= nil then
+            if success then
                 if vehicle_object.reward == nil then
                     setReward(vehicle_id, vehicle_data)
                 end
@@ -101,6 +98,8 @@ function onCreate(is_world_create)
                 --setAltitude(vehicle_id)
                 setSizeData(vehicle_id)
                 setNPCRoles(vehicle_id)
+            else
+                log("failed to get vehicle data when initiating")
             end
 
         end
@@ -794,10 +793,7 @@ end
 
 function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1, arg2, arg3, arg4)
     if command == "?hostile_ai_respawn" then
-        local times = 1
-        if arg1 ~= nil then
-            times = tonumber(arg1)
-        end
+        local times = tonumber(arg1) or 1
         for i = 1, times do
             local result = respawnLosses(true)
             log("result (successful:vehicle id/failed:-1):" .. tostring(result))
