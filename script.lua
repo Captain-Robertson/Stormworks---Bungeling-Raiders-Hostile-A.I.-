@@ -23,7 +23,7 @@ local search_table_tile_size = 1600
 local tick_counter = 0
 
 local debug_mode = false
-local verbose = true
+local verbose = false
 local time_multiplier = 1
 
 local friendly_frequency = 999
@@ -1523,13 +1523,13 @@ function setSizeData(vehicle_id)
     if vehicle_object ~= nil then
         if vehicle_object.size == "small" then
             vehicle_object.hp = 4000
-            vehicle_object.vision_radius = 1000
+            vehicle_object.vision_radius = 2000
             vehicle_object.orbit_radius = 500
             vehicle_object.explosion_size = 0.6
             vehicle_object.icon_colour = { 255, 255, 0 }
         elseif vehicle_object.size == "medium" then
             vehicle_object.hp = 10000
-            vehicle_object.vision_radius = 1500
+            vehicle_object.vision_radius = 2000
             vehicle_object.orbit_radius = 750
             vehicle_object.explosion_size = 1.0
             vehicle_object.icon_colour = { 255, 125, 0 }
