@@ -1,7 +1,7 @@
 ---@diagnostic disable: lowercase-global
 g_savedata = {
-    show_markers = property.checkbox("Show hostile vessels on the map", true),
-    allow_missiles = property.checkbox("Allow hostile vessels with missiles", true),
+    show_markers = property.checkbox("Show the approximate position of hostiles on the map every few minutes", true),
+    allow_missiles = property.checkbox("Allow hostiles armed with missiles", true),
     allow_submarines = property.checkbox("Allow hostile submarines", true),
     allow_helis = property.checkbox("Allow hostile aircraft", true),
     vehicles = {},
