@@ -26,6 +26,8 @@ local debug_mode = false
 local verbose = false
 local time_multiplier = 1
 
+local marker_on_duration = 60 * 60 * 1
+local marker_off_duration = 60 * 60 * 1
 local friendly_frequency = 999
 
 local TYPE_HELICOPTER = "helicopter"
@@ -87,9 +89,7 @@ function onCreate(is_world_create)
             if vehicle_object.despawn_timer == nil then
                 vehicle_object.despawn_timer = 0
             end
-            if vehicle_object.marker_timer == nil then
-                vehicle_object.marker_timer = 0
-            end
+            vehicle_object.marker_timer = math.random(-marker_off_duration, marker_on_duration)
             if success then
                 if vehicle_object.reward == nil then
                     setReward(vehicle_id, vehicle_data)
@@ -562,8 +562,7 @@ end
 function updateVehicleMarkers(vehicle_id, update_rate)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
 
-    local on_duration = 60 * 60 * 1
-    local off_duration = 60 * 60 * 1
+    
 
     server.removeMapObject(-1, vehicle_object.map_id)
     if g_savedata.show_markers then
@@ -598,7 +597,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
                         end
                         server.addMapObject(-1, vehicle_object.map_id, 0, 18, marker_position.x, marker_position.z, 0, 0, -1, 0,
                             label, vehicle_object.vision_radius,
-                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], math.min(math.ceil(vehicle_object.marker_timer/on_duration*256 / 16) * 64,255))
+                            description, vehicle_object.icon_colour[1], vehicle_object.icon_colour[2], vehicle_object.icon_colour[3], math.min(math.ceil(vehicle_object.marker_timer/marker_on_duration*256 / 16) * 64,255))
                     end
                 end
             end
@@ -619,14 +618,14 @@ function updateVehicleMarkers(vehicle_id, update_rate)
             end
         end
         vehicle_object.marker_timer = vehicle_object.marker_timer - update_rate
-        if vehicle_object.marker_timer < -off_duration then
-            local chance = (-off_duration - vehicle_object.marker_timer) / (off_duration * 3)
+        if vehicle_object.marker_timer < -marker_off_duration then
+            local chance = (-marker_off_duration - vehicle_object.marker_timer) / (marker_off_duration * 3)
             if math.random() <= chance then
                 -- check if should create marker
                 local vehicle_transform, success = server.getVehiclePos(vehicle_id)
                 if success then
 
-                    vehicle_object.marker_timer = on_duration
+                    vehicle_object.marker_timer = marker_on_duration
                     local _x,_,_z = matrix.position(vehicle_transform)
                     local angle = math.random()*math.pi*2
                     local dist = vehicle_object.vision_radius * math.random()
