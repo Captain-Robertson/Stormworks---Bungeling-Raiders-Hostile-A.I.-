@@ -27,7 +27,7 @@ local verbose = false
 local time_multiplier = 1
 
 local marker_on_duration = 60 * 60 * 1
-local marker_off_duration = 30 * 30 * 1
+local marker_off_duration = 60 * 20 * 1
 local friendly_frequency = 999
 
 local TYPE_HELICOPTER = "helicopter"
