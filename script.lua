@@ -9,6 +9,7 @@ g_savedata = {
     start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
     max_vehicle_count = property.slider("Max AI count", 0, 50, 1, 25),
     victim_vehicles = {},
+	min_vehicle_size = property.slider("Min AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 1),
     max_vehicle_size = property.slider("Max AI vessel size (1-Small 2-Medium 3-Large)", 1, 3, 1, 3),
     respawn_frequency = property.slider("Respawn frequency (minutes)", 0, 60, 1, 30),
     hp_modifier = property.slider("AI HP modifier", 0.3, 3, 0.1, 1.0)
@@ -75,6 +76,7 @@ function onCreate(is_world_create)
             end
             g_savedata.max_vehicle_count = g_savedata.max_vehicle_count or 25
             g_savedata.respawn_frequency = g_savedata.respawn_frequency or 5
+			g_savedata.min_vehicle_size = g_savedata.min_vehicle_size or 1
             g_savedata.max_vehicle_size = g_savedata.max_vehicle_size or 3
             g_savedata.hp_modifier = g_savedata.hp_modifier or 1
             if vehicle_object.path == nil then
@@ -832,6 +834,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.max_vehicle_count = tonumber(new_value)
             elseif setting_name == "respawn_frequency" then
                 g_savedata.respawn_frequency = tonumber(new_value)
+				elseif setting_name == "min_vehicle_size" then
+                g_savedata.min_vehicle_size = tonumber(new_value)
             elseif setting_name == "max_vehicle_size" then
                 g_savedata.max_vehicle_size = tonumber(new_value)
             elseif setting_name == "allow_submarines" then
@@ -847,6 +851,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         announce("show_markers:" .. tostring(g_savedata.show_markers))
         announce("max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
         announce("respawn_frequency:" .. tostring(g_savedata.respawn_frequency))
+		announce("min_vehicle_size:" .. tostring(g_savedata.min_vehicle_size))
         announce("max_vehicle_size:" .. tostring(g_savedata.max_vehicle_size))
         announce("hp_modifier:" .. tostring(g_savedata.hp_modifier))
     end
@@ -1319,6 +1324,14 @@ function getRandomLocation()
         local allowed = true
         --check if it has missiles and missiles are allowed
         if hasTag(tags, "missiles") and not g_savedata.allow_missiles then
+            allowed = false
+        end
+
+		if hasTag(tags, "size=small") and g_savedata.min_vehicle_size > 1 and not hasTag(tags, "type=enemy_ai_heli") then
+            allowed = false
+        end
+
+        if hasTag(tags, "size=medium") and g_savedata.min_vehicle_size > 2 then
             allowed = false
         end
 
