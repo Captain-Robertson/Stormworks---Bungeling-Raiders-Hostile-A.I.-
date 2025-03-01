@@ -2,6 +2,7 @@
 g_savedata = {
     show_markers = property.checkbox("Show the approximate position of hostiles on the map every few minutes", true),
     allow_missiles = property.checkbox("Allow hostiles armed with missiles", true),
+	allow_torpedoes = property.checkbox("Allow hostile ships and aircraft armed with torpedoes", true),
     allow_submarines = property.checkbox("Allow hostile submarines", true),
     allow_helis = property.checkbox("Allow hostile aircraft", true),
     vehicles = {},
@@ -64,6 +65,9 @@ function onCreate(is_world_create)
             local vehicle_data, success = server.getVehicleData(vehicle_id)
             if g_savedata.allow_missiles == nil then
                 g_savedata.allow_missiles = true
+            end
+			if g_savedata.allow_torpedoes == nil then
+                g_savedata.allow_torpedoes = true
             end
             if g_savedata.allow_submarines == nil then
                 g_savedata.allow_submarines = true
@@ -426,7 +430,8 @@ function setVehicleToCombat(vehicle_id)
 
             refuel(vehicle_id)
             reload(vehicle_id)
-            setNPCSeats(vehicle_id)
+            --setNPCSeats(vehicle_id) 
+			-- The above line has been commented out as it was making the crew glitch in and out of their seats during combat, causing the gunner to lose track of the target
             return
         else
             log("failed to create path to combat destination")
@@ -828,6 +833,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
             local new_value = arg2
             if setting_name == "allow_missiles" then
                 g_savedata.allow_missiles = new_value == "true"
+			elseif setting_name == "allow_torpedoes" then
+                g_savedata.allow_torpedoes = new_value == "true"
             elseif setting_name == "show_markers" then
                 g_savedata.show_markers = new_value == "true"
             elseif setting_name == "max_vehicle_count" then
@@ -847,6 +854,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
             announce("?hostile_ai_settings setting_name new_value")
         end
         announce("allow_missiles:" .. tostring(g_savedata.allow_missiles))
+		announce("allow_torpedoes:" .. tostring(g_savedata.allow_torpedoes))
         announce("allow_submarines:" .. tostring(g_savedata.allow_submarines))
         announce("show_markers:" .. tostring(g_savedata.show_markers))
         announce("max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
@@ -1324,6 +1332,10 @@ function getRandomLocation()
         local allowed = true
         --check if it has missiles and missiles are allowed
         if hasTag(tags, "missiles") and not g_savedata.allow_missiles then
+            allowed = false
+        end
+		
+		if hasTag(tags, "torpedoes") and not g_savedata.allow_torpedoes then
             allowed = false
         end
 
