@@ -431,7 +431,7 @@ function setVehicleToCombat(vehicle_id)
             refuel(vehicle_id)
             reload(vehicle_id)
             --setNPCSeats(vehicle_id) 
-			-- The above line has been commented out as it was making the crew glitch in and out of their seats during combat, causing the gunner to lose track of the target
+			-- The above line was commented out as it was making the crew re-sit back in their seats too often during combat, often preventing the gunner AI from firing for a good 20-30 seconds or more.
             return
         else
             log("failed to create path to combat destination")
@@ -786,11 +786,12 @@ end
 
 function changeFriendlyFrequency()
     local vehicles = g_savedata.vehicles
-    --change every 6 seconds
-    if isTickID(0, 60 * 6) then
+    --change every 25 seconds
+    if isTickID(0, 60 * 25) then
         friendly_frequency = math.random(100, 999)
         for vehicle_id, _ in pairs(vehicles) do
             server.setVehicleKeypad(vehicle_id, "friendly frequency", friendly_frequency)
+			setNPCSeats(vehicle_id) -- Added this here to help fix the bug where the gunner AI sometimes pushes the designator turret too far and needs to be reset
         end
     end
 end
