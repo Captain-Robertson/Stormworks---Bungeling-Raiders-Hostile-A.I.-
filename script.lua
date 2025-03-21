@@ -1,6 +1,7 @@
 ---@diagnostic disable: lowercase-global
 g_savedata = {
     show_markers = property.checkbox("Show the approximate position of hostiles on the map every few minutes", true),
+	show_victims = property.checkbox("Add markers on the map for any civilian traffic that come under attack", false),
     allow_missiles = property.checkbox("Allow hostiles armed with missiles", true),
 	allow_torpedoes = property.checkbox("Allow hostile ships and aircraft armed with torpedoes", true),
     allow_submarines = property.checkbox("Allow hostile submarines", true),
@@ -77,6 +78,9 @@ function onCreate(is_world_create)
             end
             if g_savedata.show_markers == nil then
                 g_savedata.show_markers = true
+            end
+			if g_savedata.show_victims == nil then
+                g_savedata.show_victims = true
             end
             g_savedata.max_vehicle_count = g_savedata.max_vehicle_count or 25
             g_savedata.respawn_frequency = g_savedata.respawn_frequency or 5
@@ -585,7 +589,7 @@ function updateVehicleMarkers(vehicle_id, update_rate)
         if not debug_mode then
 
             local label = string.format("Hostile %s sighted", vehicle_object.ai_type)
-            local description = string.format("A %s sized %s belonging to the Bungeling Empire has been spotted at this location, moving at high speed. ",vehicle_object.size,vehicle_object.ai_type)
+            local description = string.format("A %s sized %s belonging to the Bungeling Empire has been spotted at this approximate location. ",vehicle_object.size,vehicle_object.ai_type)
             
             --[[ code for vehicle following marker
             server.addMapObject(-1, vehicle_object.map_id, 1, 18, 0, 0, 0, 0, vehicle_id, 0,
@@ -838,6 +842,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.allow_torpedoes = new_value == "true"
             elseif setting_name == "show_markers" then
                 g_savedata.show_markers = new_value == "true"
+			elseif setting_name == "show_victims" then
+                g_savedata.show_victims = new_value == "true"
             elseif setting_name == "max_vehicle_count" then
                 g_savedata.max_vehicle_count = tonumber(new_value)
             elseif setting_name == "respawn_frequency" then
@@ -858,6 +864,7 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
 		announce("allow_torpedoes:" .. tostring(g_savedata.allow_torpedoes))
         announce("allow_submarines:" .. tostring(g_savedata.allow_submarines))
         announce("show_markers:" .. tostring(g_savedata.show_markers))
+		announce("show_victims:" .. tostring(g_savedata.show_victims))
         announce("max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
         announce("respawn_frequency:" .. tostring(g_savedata.respawn_frequency))
 		announce("min_vehicle_size:" .. tostring(g_savedata.min_vehicle_size))
@@ -1195,9 +1202,9 @@ function trackVictims()
                 insertToSearchTable(victim_vehicle_id)
                 server.removeMapID(-1, victim_vehicle.map_id)
                 if not debug_mode then
-                    if not g_savedata.show_markers then
+                    if g_savedata.show_victims then
                         if victim_vehicle.targeted then
-                            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack by a hostile vessel.", 255, 0, 0, 255)
+                            server.addMapObject(-1, victim_vehicle.map_id, 1, 19, 0, 0, 0, 0, victim_vehicle_id, 0, "Under Attack", 500, "A Mayday has been received from a civilian ship or aircraft claiming to be under attack at this location.", 255, 0, 0, 255)
                         end
                     end
                 else
