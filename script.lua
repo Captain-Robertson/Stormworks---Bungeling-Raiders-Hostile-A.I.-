@@ -251,21 +251,33 @@ function createCombatDestination(vehicle_id)
         log("failed to find self transform")
         return false
     end
-    local gun_run = false
+
+    -- Set the state directly on the vehicle object
     if vehicle_object.ai_type == TYPE_HELICOPTER then
-        gun_run = math.random() < 0.5
-        vehicle_object.state.gun_run = gun_run
-	elseif vehicle_object.ai_type == TYPE_PLANE then
-		vehicle_object.state.gun_run = gun_run
+        vehicle_object.state.gun_run = math.random() < 0.5
+    elseif vehicle_object.ai_type == TYPE_PLANE then
+        vehicle_object.state.gun_run = false -- Apparently planes will only attack when gun_run is set to false... Go figure!
     end
-    if gun_run then
+
+    -- Read from the vehicle state instead of the dead local variable
+    if vehicle_object.state.gun_run then
         local target_x, target_y, target_z = matrix.position(target_transform)
+        
+        -- Default target positioning for helicopters
         vehicle_object.destination.x = target_x
         vehicle_object.destination.y = target_y
         vehicle_object.destination.z = target_z
 
+        -- Override for planes to try and prevent suicidal dives
+        if vehicle_object.ai_type == TYPE_PLANE then
+            -- To try and force the planes to aim at least 40-50 meters higher than the target so that they pull out of the dive sooner
+            local minimum_attack_altitude = target_z + 45 
+            vehicle_object.destination.z = minimum_attack_altitude
+        end
+
         return true
     else
+        -- This is used by helicopters to orbit the target and use turrets or side guns when not performing a gun run
         local target_x, _, target_z = matrix.position(target_transform)
         local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
         local orbit_direction = (vehicle_id % 2) * 2 - 1
@@ -313,7 +325,7 @@ function createPath(vehicle_id)
         end
     end
     local path_list = {}
-    if vehicle_object.ai_type == TYPE_HELICOPTER or TYPE_PLANE then
+    if vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
         path_list[1] = { x = vehicle_object.destination.x,
                          y = vehicle_object.destination.y,
                          z = vehicle_object.destination.z,
@@ -368,7 +380,7 @@ function updateVehicleInCombat(vehicle_id)
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local vehicle_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
         local victim_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], victim_transform)
-        if vehicle_object.ai_type == TYPE_HELICOPTER or TYPE_PLANE then
+        if vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
             local _, victim_altitude, _ = matrix.position(victim_transform)
             local target_altitude = victim_altitude + 50
             if vehicle_object.state.gun_run == true then
@@ -1498,10 +1510,10 @@ function getCruiseAltitude(vehicle_id)
     if vehicle_object ~= nil then
         if vehicle_object.ai_type == TYPE_SUBMARINE then
             target_altitude = -10
-        elseif vehicle_object.ai_type == TYPE_HELICOPTER or TYPE_PLANE then
+			elseif vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
             target_altitude = 300
-        end
-    end
+			end
+		end
     return target_altitude
 end
 
@@ -1510,7 +1522,7 @@ function getCrushAltitude(vehicle_id)
     local crush_depth = -22
     if vehicle_object.ai_type == TYPE_SUBMARINE then
         crush_depth = -100
-    elseif vehicle_object.ai_type == TYPE_HELICOPTER or TYPE_PLANE then
+		elseif vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
         crush_depth = 0
     end
     return crush_depth
