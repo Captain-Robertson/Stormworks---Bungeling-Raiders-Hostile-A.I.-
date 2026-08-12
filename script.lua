@@ -5,7 +5,8 @@ g_savedata = {
     allow_missiles = property.checkbox("Allow hostiles armed with missiles", true),
 	allow_torpedoes = property.checkbox("Allow hostile ships and aircraft armed with torpedoes", true),
     allow_submarines = property.checkbox("Allow hostile submarines", true),
-    allow_helis = property.checkbox("Allow hostile aircraft", true),
+    allow_helis = property.checkbox("Allow hostile helicopters", true),
+	allow_planes = property.checkbox("Allow hostile airplanes", true),
     vehicles = {},
     respawn_timer = 0,
     start_vehicle_count = property.slider("Initial AI count", 0, 50, 1, 25),
@@ -34,6 +35,7 @@ local marker_off_duration = 60 * 20 * 1
 local friendly_frequency = 999
 
 local TYPE_HELICOPTER = "helicopter"
+local TYPE_PLANE = "airplane"
 local TYPE_VESSEL = "vessel"
 local TYPE_SUBMARINE = "submarine"
 
@@ -75,6 +77,9 @@ function onCreate(is_world_create)
             end
             if g_savedata.allow_helis == nil then
                 g_savedata.allow_helis = true
+            end
+			if g_savedata.allow_planes == nil then
+                g_savedata.allow_planes = true
             end
             if g_savedata.show_markers == nil then
                 g_savedata.show_markers = true
@@ -151,6 +156,9 @@ function build_locations(playlist_index, location_index)
             elseif tag_object == "type=enemy_ai_heli" then
                 is_valid = true
                 _ai_type = TYPE_HELICOPTER
+			elseif tag_object == "type=enemy_ai_plane" then
+                is_valid = true
+                _ai_type = TYPE_PLANE
             elseif tag_object == "submarine" then
                 _ai_type = TYPE_SUBMARINE
             elseif tag_object == "unique" then
@@ -243,19 +251,26 @@ function createCombatDestination(vehicle_id)
         log("failed to find self transform")
         return false
     end
-    local gun_run = false
+
+    -- Set the state directly on the vehicle object
     if vehicle_object.ai_type == TYPE_HELICOPTER then
-        gun_run = math.random() < 0.5
-        vehicle_object.state.gun_run = gun_run
+        vehicle_object.state.gun_run = math.random() < 0.5
+    elseif vehicle_object.ai_type == TYPE_PLANE then
+        vehicle_object.state.gun_run = false -- Apparently planes will only attack when gun_run is set to false... Go figure!
     end
-    if gun_run then
+
+    -- Read from the vehicle state instead of the dead local variable
+    if vehicle_object.state.gun_run then
         local target_x, target_y, target_z = matrix.position(target_transform)
+        
+        -- Default target positioning for helicopters
         vehicle_object.destination.x = target_x
         vehicle_object.destination.y = target_y
         vehicle_object.destination.z = target_z
 
         return true
     else
+        -- This is used by helicopters to orbit the target and use turrets or side guns when not performing a gun run
         local target_x, _, target_z = matrix.position(target_transform)
         local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
         local orbit_direction = (vehicle_id % 2) * 2 - 1
@@ -303,7 +318,7 @@ function createPath(vehicle_id)
         end
     end
     local path_list = {}
-    if vehicle_object.ai_type == TYPE_HELICOPTER then
+    if vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
         path_list[1] = { x = vehicle_object.destination.x,
                          y = vehicle_object.destination.y,
                          z = vehicle_object.destination.z,
@@ -358,13 +373,16 @@ function updateVehicleInCombat(vehicle_id)
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local vehicle_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
         local victim_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], victim_transform)
-        if vehicle_object.ai_type == TYPE_HELICOPTER then
+        if vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
             local _, victim_altitude, _ = matrix.position(victim_transform)
             local target_altitude = victim_altitude + 50
             if vehicle_object.state.gun_run == true then
                 server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
                 server.setAIState(vehicle_object.driver, 3)
-            else
+            elseif vehicle_object.ai_type == TYPE_PLANE then
+			server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
+			server.setAIState(vehicle_object.driver, 2)
+			else
                 server.setAITargetVehicle(vehicle_object.driver, -1)
                 server.setAIState(vehicle_object.driver, 1)
             end
@@ -516,6 +534,8 @@ function updateVehicleInPseudo(vehicle_id)
             speed = 60
         elseif vehicle_object.ai_type == TYPE_HELICOPTER then
             speed = 320
+		elseif vehicle_object.ai_type == TYPE_PLANE then
+            speed = 500
         end
 
         local movement_x = vehicle_object.path[1].x - vehicle_x
@@ -781,6 +801,7 @@ function updateVehicles()
             local crush_depth = getCrushAltitude(vehicle_id)
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) or vehicle_pos[14] < crush_depth then
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
+				vehicle_object.is_killed = true -- Flag the vehicle as actually having been killed so that the player can be rewarded for it
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
@@ -790,8 +811,8 @@ end
 
 function changeFriendlyFrequency()
     local vehicles = g_savedata.vehicles
-    --change every 25 seconds
-    if isTickID(0, 60 * 25) then
+    --change every 30 seconds
+    if isTickID(0, 60 * 30) then
         friendly_frequency = math.random(100, 999)
         for vehicle_id, _ in pairs(vehicles) do
             server.setVehicleKeypad(vehicle_id, "friendly frequency", friendly_frequency)
@@ -854,6 +875,10 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
                 g_savedata.max_vehicle_size = tonumber(new_value)
             elseif setting_name == "allow_submarines" then
                 g_savedata.allow_submarines = new_value == "true"
+			elseif setting_name == "allow_helis" then
+                g_savedata.allow_helis = new_value == "true"
+			elseif setting_name == "allow_planes" then
+                g_savedata.allow_planes = new_value == "true"
             elseif setting_name == "hp_modifier" then
                 g_savedata.hp_modifier = tonumber(new_value)
             end
@@ -863,6 +888,8 @@ function onCustomCommand(full_message, peer_id, is_admin, is_auth, command, arg1
         announce("allow_missiles:" .. tostring(g_savedata.allow_missiles))
 		announce("allow_torpedoes:" .. tostring(g_savedata.allow_torpedoes))
         announce("allow_submarines:" .. tostring(g_savedata.allow_submarines))
+		announce("allow_helis:" .. tostring(g_savedata.allow_helis))
+		announce("allow_planes:" .. tostring(g_savedata.allow_planes))
         announce("show_markers:" .. tostring(g_savedata.show_markers))
 		announce("show_victims:" .. tostring(g_savedata.show_victims))
         announce("max_vehicle_count:" .. tostring(g_savedata.max_vehicle_count))
@@ -1075,7 +1102,7 @@ end
 
 function killReward(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object == nil then
+    if vehicle_object == nil or not vehicle_object.is_killed then -- Only rewards the player for actual kills and not from using the console command
         return
     end
 
@@ -1370,6 +1397,10 @@ function getRandomLocation()
         if hasTag(tags, "type=enemy_ai_heli") and not g_savedata.allow_helis then
             allowed = false
         end
+		
+		if hasTag(tags, "type=enemy_ai_plane") and not g_savedata.allow_planes then
+            allowed = false
+        end
 
         if allowed then
             return location
@@ -1473,10 +1504,10 @@ function getCruiseAltitude(vehicle_id)
     if vehicle_object ~= nil then
         if vehicle_object.ai_type == TYPE_SUBMARINE then
             target_altitude = -10
-        elseif vehicle_object.ai_type == TYPE_HELICOPTER then
+			elseif vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
             target_altitude = 300
-        end
-    end
+			end
+		end
     return target_altitude
 end
 
@@ -1485,7 +1516,7 @@ function getCrushAltitude(vehicle_id)
     local crush_depth = -22
     if vehicle_object.ai_type == TYPE_SUBMARINE then
         crush_depth = -100
-    elseif vehicle_object.ai_type == TYPE_HELICOPTER then
+		elseif vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
         crush_depth = 0
     end
     return crush_depth
@@ -1518,6 +1549,9 @@ function setAIType(vehicle_id, vehicle_data)
         end
         if tag_object == "type=enemy_ai_heli" then
             _ai_type = TYPE_HELICOPTER
+        end
+		if tag_object == "type=enemy_ai_plane" then
+            _ai_type = TYPE_PLANE
         end
     end
     g_savedata.vehicles[vehicle_id].ai_type = _ai_type
