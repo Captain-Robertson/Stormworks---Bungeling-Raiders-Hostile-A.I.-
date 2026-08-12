@@ -268,13 +268,6 @@ function createCombatDestination(vehicle_id)
         vehicle_object.destination.y = target_y
         vehicle_object.destination.z = target_z
 
-        -- Override for planes to try and prevent suicidal dives
-        if vehicle_object.ai_type == TYPE_PLANE then
-            -- To try and force the planes to aim at least 40-50 meters higher than the target so that they pull out of the dive sooner
-            local minimum_attack_altitude = target_z + 45 
-            vehicle_object.destination.z = minimum_attack_altitude
-        end
-
         return true
     else
         -- This is used by helicopters to orbit the target and use turrets or side guns when not performing a gun run
@@ -808,6 +801,7 @@ function updateVehicles()
             local crush_depth = getCrushAltitude(vehicle_id)
             if vehicle_object.state.timer == 0 or (vehicle_object.despawn_timer > 60 * 2) or vehicle_pos[14] < crush_depth then
                 if vehicle_pos[14] < crush_depth or vehicle_object.despawn_timer > 0 then
+				vehicle_object.is_killed = true -- Flag the vehicle as actually having been killed so that the player can be rewarded for it
                     server.despawnVehicle(vehicle_id, true) --clean up code moved further down the line for instantly destroyed vehicle
                 end
             end
@@ -1108,7 +1102,7 @@ end
 
 function killReward(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
-    if vehicle_object == nil then
+    if vehicle_object == nil or not vehicle_object.is_killed then -- Only rewards the player for actual kills and not from using the console command
         return
     end
 
