@@ -270,7 +270,7 @@ function createCombatDestination(vehicle_id)
 
         return true
     else
-        -- This is used by helicopters to orbit the target and use turrets or side guns when not performing a gun run
+        -- This is used by ships and helicopters to orbit the target and use turrets or side guns when not performing a gun run
         local target_x, _, target_z = matrix.position(target_transform)
         local vehicle_x, _, vehicle_z = matrix.position(vehicle_transform)
         local orbit_direction = (vehicle_id % 2) * 2 - 1
@@ -354,18 +354,18 @@ function updateVehicleInCombat(vehicle_id)
     local vehicle_object = g_savedata.vehicles[vehicle_id]
     if not vehicle_object then return end
 
-    if vehicle_object.target == -1 then
+    if vehicle_object.target == -1 or not g_savedata.victim_vehicles[vehicle_object.target] then
         setVehicleToPathing(vehicle_id)
         return
     end
-    local victim_transform, target_success = server.getVehiclePos(vehicle_object.target)
-    if not target_success then
-        setVehicleToPathing(vehicle_id)
-    end
+
+    local victim_transform = g_savedata.victim_vehicles[vehicle_object.target].transform
     local previous_target = vehicle_object.target
+    
     if targetNearestVictim(vehicle_id) then
         if previous_target ~= vehicle_object.target then
             setVehicleToCombat(vehicle_id)
+            return -- Exit this tick to let the new path generate cleanly
         end
     end
 
@@ -373,47 +373,109 @@ function updateVehicleInCombat(vehicle_id)
         local vehicle_pos = server.getVehiclePos(vehicle_id)
         local vehicle_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], vehicle_pos)
         local victim_distance = calculate_distance_to_next_waypoint(vehicle_object.path[1], victim_transform)
-        if vehicle_object.ai_type == TYPE_HELICOPTER or vehicle_object.ai_type == TYPE_PLANE then
+
+        -- NEW PLANE STRAFING WORKAROUND LOGIC
+		
+        if vehicle_object.ai_type == TYPE_PLANE then
+    local target_x, target_y, target_z = matrix.position(victim_transform)
+    local jet_x, jet_y, jet_z = matrix.position(vehicle_pos)
+
+    -- 1. Flat horizontal distance to target
+    local jet_dist = math.sqrt((target_x - jet_x)^2 + (target_z - jet_z)^2)
+
+    -- 2. Find coordinates 860m directly in front of the plane natively
+    local front_matrix = matrix.multiply(vehicle_pos, matrix.translation(0, 0, 860))
+    local front_x, _, front_z = matrix.position(front_matrix)
+    local in_front_dist = math.sqrt((target_x - front_x)^2 + (target_z - front_z)^2)
+
+    -- 3. Extract the plane's global forward unit direction vector (local Z is forward)
+    local fx, _, fz, _ = matrix.multiplyXYZW(vehicle_pos, 0, 0, 1, 0)
+
+    local engage_dist = 800
+
+    -- ACTIVE STRAFING RUN - Take cover!
+    if in_front_dist < jet_dist and jet_dist <= engage_dist then
+        -- Strip vehicle lock to suppress hardcoded dive bombing behavior
+        server.setAITargetVehicle(vehicle_object.driver, -1) 
+        server.setAIState(vehicle_object.driver, 1) -- Coordinate tracking mode
+        
+        -- Force a level approach flight path safely above target height and hopefully miss any trees or the masts of tall ships
+        local safe_strafe_altitude = math.max(target_y + 12, 20) 
+        server.setAITarget(vehicle_object.driver, matrix.translation(target_x, safe_strafe_altitude, target_z))
+        
+        vehicle_object.just_strafed = true
+
+    -- POST-RUN ESCAPE/OVERSHOOT
+    elseif vehicle_object.just_strafed or jet_dist < 200 then
+        server.setAITargetVehicle(vehicle_object.driver, -1)
+        server.setAIState(vehicle_object.driver, 1)
+        
+        -- Project coordinates 1,000m forward along the plane's vector starting from the target
+        local escape_x = target_x + (1000 * fx)
+        -- Keep altitude high and safe during the overshoot climb
+        local escape_y = target_y + 160 
+        local escape_z = target_z + (1000 * fz)
+        
+        server.setAITarget(vehicle_object.driver, matrix.translation(escape_x, escape_y, escape_z))
+        
+        -- Clear the strafed flag once safely away from the target
+        if jet_dist > 600 then
+            vehicle_object.just_strafed = false
+        end
+
+    -- HIGH-ALTITUDE RE-ENGAGEMENT RETREAT
+    else
+        server.setAITargetVehicle(vehicle_object.driver, -1)
+        server.setAIState(vehicle_object.driver, 1)
+        -- Travel directly above target coordinate to set up next approach loop
+        server.setAITarget(vehicle_object.driver, matrix.translation(target_x, target_y + 160, target_z))
+    end
+
+        -- ORIGINAL HELICOPTER BEHAVIOUR - This doesn't need to be changed as it works fine as is
+        
+        elseif vehicle_object.ai_type == TYPE_HELICOPTER then
             local _, victim_altitude, _ = matrix.position(victim_transform)
             local target_altitude = victim_altitude + 50
+            
             if vehicle_object.state.gun_run == true then
                 server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
                 server.setAIState(vehicle_object.driver, 3)
-            elseif vehicle_object.ai_type == TYPE_PLANE then
-			server.setAITargetVehicle(vehicle_object.driver, vehicle_object.target)
-			server.setAIState(vehicle_object.driver, 2)
-			else
+            else
                 server.setAITargetVehicle(vehicle_object.driver, -1)
                 server.setAIState(vehicle_object.driver, 1)
             end
-            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z)))
+            server.setAITarget(vehicle_object.driver, matrix.translation(vehicle_object.path[1].x, target_altitude, vehicle_object.path[1].z))
+
+        -- ORIGINAL SURFACE VESSEL BEHAVIOUR - Likewise, this is fine as it currently is
+        
         else
-            server.setAITarget(vehicle_object.driver, (matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z)))
+            server.setAITarget(vehicle_object.driver, matrix.translation(vehicle_object.path[1].x, vehicle_object.path[1].y, vehicle_object.path[1].z))
             server.setAIState(vehicle_object.driver, 1)
         end
 
+        -- Cycle paths and update fuel/ammo payloads
         refuel(vehicle_id)
         reload(vehicle_id)
 
-        if vehicle_distance < 100 or victim_distance > vehicle_object.orbit_radius*1.15 then
+        if vehicle_distance < 100 or victim_distance > (vehicle_object.orbit_radius * 1.15) then
             vehicle_object.state.timer = 0
             server.removeMapLine(-1, vehicle_object.path[1].ui_id)
             table.remove(vehicle_object.path, 1)
         end
     else
+        -- Fallback to idle if paths are entirely exhausted
         server.setAIState(vehicle_object.driver, 0)
-        --keep engaging if is in combat and not too damaged
+        
         local hp = vehicle_object.hp
         if g_savedata.hp_modifier ~= nil and g_savedata.hp_modifier > 0 then
             hp = hp * g_savedata.hp_modifier
         end
-
-        if vehicle_object.current_damage < hp * 0.75 then
-            if targetNearestVictim(vehicle_id) then
-                setVehicleToCombat(vehicle_id)
-            end
-        else
+        
+        if vehicle_object.current_damage >= hp * 0.75 then
             setVehicleToWaiting(vehicle_id)
+        else
+            -- Recalculate fresh combat coordinates if still combat viable
+            setVehicleToCombat(vehicle_id)
         end
     end
 end
