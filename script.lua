@@ -1436,7 +1436,7 @@ function getRandomLocation()
             allowed = false
         end
 
-		if hasTag(tags, "size=small") and g_savedata.min_vehicle_size > 1 and not hasTag(tags, "type=enemy_ai_heli") then
+		if hasTag(tags, "size=small") and g_savedata.min_vehicle_size > 1 and not hasTag(tags, "type=enemy_ai_heli") and not hasTag(tags, "type=enemy_ai_plane") then
             allowed = false
         end
 
